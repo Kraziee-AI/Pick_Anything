@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+logs/
+outputs/
+.claude/settings.local.json
+kitchen_with_orange.zip
