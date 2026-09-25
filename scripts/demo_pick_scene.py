@@ -57,11 +57,10 @@ def main() -> None:
 
     robot = scene["robot"]
     objects = {
-        "apple": scene["apple"],
         "orange": scene["orange"],
         "box": scene["cardboard_box"],
     }
-    spawn_z = {"apple": FRUIT_SPAWN_Z, "orange": FRUIT_SPAWN_Z, "box": BOX_SPAWN_Z}
+    spawn_z = {"orange": FRUIT_SPAWN_Z, "box": BOX_SPAWN_Z}
 
     # Randomize placement within arm reach (annulus sector clipped to table).
     import random
@@ -80,7 +79,7 @@ def main() -> None:
     # Resolve SO101 joint indices by name (order is not guaranteed).
     arm_names = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
     arm_ids, _ = robot.find_joints(arm_names)
-    gripper_ids, _ = robot.find_joints(["gripper"])
+    gripper_ids, _ = robot.find_joints(["gripper"])  # 资产关节已改名（避免与 gripper body 同名冲突）
     default_joint_pos = as_tensor(robot.data.default_joint_pos)
     default_arm = default_joint_pos[:, arm_ids]
     default_gripper = default_joint_pos[:, gripper_ids]
