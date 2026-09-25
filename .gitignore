@@ -3,5 +3,6 @@ __pycache__/
 *.egg-info/
 logs/
 outputs/
+output/
 .claude/settings.local.json
 kitchen_with_orange.zip
