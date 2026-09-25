@@ -17,3 +17,7 @@ ORANGE_USD = ASSETS_ROOT / "objects" / "orange" / "orange.usd"
 
 # Procedural open-top tray (16 x 16 x 5 cm), see scripts/make_cardboard_box.py.
 CARDBOARD_BOX_USD = ASSETS_ROOT / "objects" / "cardboard_box" / "cardboard_box.usd"
+
+# 八阶段 reset 状态库默认路径（scripts/generate_reset_bank.py 产出）。
+# 2026-09-25 起为橘子单目标 schema（旧 pick_apple_bank_v1.pt 不兼容，已弃用）
+PICK_ORANGE_RESET_BANK = ASSETS_ROOT.parent / "reset_states" / "pick_orange_bank_v1.pt"
