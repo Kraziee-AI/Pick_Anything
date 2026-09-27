@@ -86,6 +86,10 @@ class PickRLSceneCfg(PickSceneCfg):
     # contact views is unreliable, net forces are not - see Isaac-Lift-SO101).
     orange_contact: ContactSensorCfg = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Orange")
 
+    # Net contact force on the box: staged 任务的爪-盒接触惩罚直读此传感器
+    # （2026-09-26：此前爪压盒壁零成本，放橘子常蹭壁）。v0 任务不引用它。
+    box_contact: ContactSensorCfg = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/CardboardBox")
+
     # Net contact force per robot rigid body (the default prim folds, so the
     # links sit directly under {ENV_REGEX_NS}/Robot). Arm links and claw are
     # selected by body name inside PickState; the base column is ignored.
@@ -108,6 +112,8 @@ class PickRLSceneCfg(PickSceneCfg):
         fruit_damping = sim_utils.RigidBodyPropertiesCfg(linear_damping=0.3, angular_damping=4.0)
         self.orange.spawn.rigid_props = fruit_damping
         self.orange.spawn.activate_contact_sensors = True
+        # 盒体接触上报（box_contact 传感器需要；爪-盒接触惩罚的数据源）
+        self.cardboard_box.spawn.activate_contact_sensors = True
         # RL-only light table: the referenced table USD meshes instantiate per
         # env (~5 MB each) and were the main OOM driver beyond 1024 envs; a
         # plain cuboid with the same footprint and top height (z=0.041) keeps

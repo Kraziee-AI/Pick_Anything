@@ -25,6 +25,8 @@
 from __future__ import annotations
 
 import math
+import os
+import time
 from typing import TYPE_CHECKING
 
 import torch
@@ -51,6 +53,7 @@ from pick_anything.tasks.pick_apple.stages import (
     PREGRASP_POCKET_M,
     RELEASE_CLEARANCE_M,
     RELEASE_SETTLED_SPEED_MPS,
+    RETREAT_REWARD_TARGET_M,
     STABILIZE_CONFIRM_STEPS,
     STABILIZE_MIN_Z_M,
     STABILIZE_REL_VEL_MPS,
@@ -78,6 +81,9 @@ HOME_APPROACH_M = 0.12
 HOVER_ABOVE_BOX_M = 0.14
 # PREGRASP 就位需要的最小开度（接近全开；爪角 1.745=全开）
 PREGRASP_MIN_GRIPPER_RAD = 1.30
+# lift_rise 高度势能饱和线 = LIFT 完成线 + 此裕度（2026-09-27：抬过完成
+# 线后继续上升零支付，防无界刷高；裕度覆盖 LIFT 4 步确认期间的继续上抬）
+LIFT_RISE_CAP_MARGIN_M = 0.02
 
 # --- 课程：出生阶段采样权重的三档表（按累计 reset 轮数线性过渡）---
 # early: home 为主 + 中段辅助（PPO 先学接近与就位）
@@ -142,6 +148,11 @@ class StagedPickState:
         self._stage_reach = torch.zeros(NUM_STAGES, device=self.device)
         self.reset_count = 0
         self.difficulty = 0.6
+        # RELEASE 成功门：训练/部署统一 0.055（2026-09-27 用户定版双轨口径
+        # 之一；撤退奖励的饱和线另挂 RETREAT_REWARD_TARGET_M=0.07，见
+        # reward_release_retreat——奖励推均值到 7cm、成功判 5.5cm，1.5cm
+        # 差值吸收 σ0.15 噪声）
+        self.release_clearance_m = RELEASE_CLEARANCE_M
 
     # ------------------------------------------------------------------ #
     @classmethod
@@ -251,7 +262,7 @@ class StagedPickState:
             & (self.orange_local[:, 1].abs() < PLACE_INSIDE_XY_M)
             & (self.orange_local[:, 2] > PLACE_INSIDE_Z_MIN_M)
             & (self.orange_local[:, 2] < PLACE_INSIDE_Z_MAX_M)
-            & (dist_pocket > RELEASE_CLEARANCE_M)
+            & (dist_pocket > self.release_clearance_m)
             & (self.orange_vel.norm(dim=-1) < RELEASE_SETTLED_SPEED_MPS),
         }
         confirm = {
@@ -345,6 +356,9 @@ class StagedReset(ManagerTermBase):
       段出生权重清零（绝不静默使用不足数据）；全部中段缺失时回退
       home-only。Newton 后端下 write 后驱动存活，出生夹持状态的可信度
       由生成器的物理保持验证背书。
+    * RELEASE 成功门 0.055 已统一训练/部署口径（2026-09-27，见
+      StagedPickState.release_clearance_m 与 stages.py 双轨注释），不再
+      需要 reset 时切换注入。
     """
 
     def __init__(self, cfg, env: ManagerBasedRLEnv):
@@ -560,6 +574,12 @@ class reward_grasp_close(ManagerTermBase):
     收益为零，无法刷分（difference-of-potentials 无悬停激励）。仅在爪口
     仍在橘子附近时生效，把橘子挤离后断供，与 orange_disturbed 惩罚共同
     抑制莽撞闭合。
+
+    2026-09-27 去 clamp：旧版对每步增量 ``clamp(-1, 1)`` 截断——「慢速
+    合爪（每步增量 < scale，足额付分）+ 快速张开（增量超界被截断，只罚
+    一点）」每循环净赚，det_align_v1 崩塌策略实测靠此驻留 GRASP 段。去掉
+    clamp 后支付严格等于势能差（telescoping），任意速度剖面的往复净收益
+    恒为零；每步量被物理速度界住（|Δgrip|/0.2 ≲ 0.35、|Δd|/0.008 ≲ 1.3）。
     """
 
     def __init__(self, cfg, env: ManagerBasedRLEnv):
@@ -582,8 +602,8 @@ class reward_grasp_close(ManagerTermBase):
         state.update(env)
         dist_pocket = (state.orange_pos - state.pocket_pos).norm(dim=-1)
         gate = (state.progress.stage == int(PickStage.GRASP)) & (dist_pocket < 0.075)
-        angle_prog = ((self._prev_grip - state.gripper_pos) / angle_scale).clamp(-1.0, 1.0)
-        dist_prog = ((self._prev_dist - dist_pocket) / dist_scale).clamp(-1.0, 1.0)
+        angle_prog = (self._prev_grip - state.gripper_pos) / angle_scale
+        dist_prog = (self._prev_dist - dist_pocket) / dist_scale
         pay = torch.where(self._has_prev & gate, angle_prog + dist_prog, torch.zeros_like(angle_prog))
         self._prev_grip.copy_(state.gripper_pos)
         self._prev_dist.copy_(dist_pocket)
@@ -614,6 +634,12 @@ class reward_lift_rise(ManagerTermBase):
     持续刷分，没有上升梯度（教程经验：bump 教策略停住不动）。本项按势能
     差付费：橘子每升高 ``rise_scale`` 付一单位，下落对称倒扣，悬停不付。
     门控：LIFT 段 + 已夹持 + 橘子仍在爪口（口袋距 < GRASP_PROXIMITY_M）。
+
+    2026-09-27 两处加固：(1) 去 ``clamp(-1, 1)``——截断造成「慢升足额付、
+    快降只罚一点」的每循环净赚（det_align_v1 崩塌模式之一，与 grasp_close
+    同根）；(2) 高度势能在 LIFT 完成线 + ``LIFT_RISE_CAP_MARGIN_M`` 饱和——
+    升到该线后继续抬升零支付，总支付被 (上限-起始高) 界住，且不鼓励无谓
+    高抛。改后任意速度剖面往复净收益恒为零（严格 telescoping）。
     """
 
     def __init__(self, cfg, env: ManagerBasedRLEnv):
@@ -629,21 +655,80 @@ class reward_lift_rise(ManagerTermBase):
         state = StagedPickState.get(env)
         state.update(env)
         h = (state.orange_pos[:, 2] - _TABLE_TOP_Z).clamp_min(0)
+        potential = h.clamp(max=LIFT_Z_M - _TABLE_TOP_Z + LIFT_RISE_CAP_MARGIN_M)
         dist_pocket = (state.orange_pos - state.pocket_pos).norm(dim=-1)
         gate = (
             (state.progress.stage == int(PickStage.LIFT))
             & state.progress.grasped
             & (dist_pocket < GRASP_PROXIMITY_M)
         )
-        rise = ((h - self._prev_h) / rise_scale).clamp(-1.0, 1.0)
+        rise = (potential - self._prev_h) / rise_scale
         pay = torch.where(self._has_prev & gate, rise, torch.zeros_like(rise))
-        self._prev_h.copy_(h)
+        self._prev_h.copy_(potential)
         self._has_prev.fill_(True)
         return pay
 
 
 class SafeLiftRise(reward_lift_rise):
     """reward_lift_rise 的 NaN 防护版（与 SafeStageComplete 同模式）。"""
+
+    def __call__(self, env):
+        return torch.nan_to_num(super().__call__(env), nan=0.0, posinf=1.0, neginf=-1.0)
+
+
+class reward_release_retreat(ManagerTermBase):
+    """阶段 7：势能差塑形——付「爪-橘子距离增量」（lift_rise 同款防刷分结构）。
+
+    2026-09-26 推理诊断：9250 迭代策略 100% 卡在 RELEASE「爪撤离」——开爪
+    后悬停在 3-5cm（place_descent 的终点姿态），继续后撤零收益，够不着成
+    功门；而 stage-7 出生态自带 ~10.45cm 撤退位白拿 final_success，撤退
+    动作全程零梯度。本项把撤退变成有钱赚的动作：爪每退远 ``retreat_scale``
+    付一单位。门控：RELEASE 段 + 橘子仍在盒内（xy）。
+
+    2026-09-27 重写防刷分结构（det_align_v1 崩塌实证：崩塌策略在 RELEASE
+    段把爪在 1.2cm↔8.5cm 间往复戳、橘子早已静置，release_retreat 单项
+    +6.9/局，0/32 成功）。旧版两处漏洞：(a) ``clamp(-1,1)`` 截断——慢退
+    足额付、快戳截断只罚一点，每循环净赚；(b) 「成功线+3cm」距离窗硬门
+    ——窗外断供造成窗口边缘不对称跳跃。修法：势能 φ = min(爪距,
+    RETREAT_REWARD_TARGET_M=0.07) 饱和，支付 = Δφ/scale 无 clamp——任意
+    速度剖面往复严格 telescoping 净零，每局总支付被 (0.07-起始距) 界住。
+
+    双轨口径（2026-09-27 用户定版）：**撤退奖励峰值 0.07m、成功门 0.055m**
+    ——奖励把爪均值推到 7cm（饱和点），成功判定在 5.5cm，1.5cm 差值吸收
+    σ0.15 采样噪声的抖动。此前"门=饱和线=0.07"的零裕度结构实测让 10 步
+    确认（断一步即清零）成为不可能事件、成功率钉 1%；退到 0.07 后继续
+    后退零支付，想再赚只能让成功结算 +20（一次性终局奖，与撤退动作完全
+    对齐，无刷分空间）。
+    """
+
+    def __init__(self, cfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self._prev_dist = torch.zeros(self.num_envs, device=self.device)
+        self._has_prev = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+
+    def reset(self, env_ids=None) -> None:
+        ids = slice(None) if env_ids is None else env_ids
+        self._has_prev[ids] = False
+
+    def __call__(self, env: ManagerBasedRLEnv, retreat_scale: float = 0.005) -> torch.Tensor:
+        state = StagedPickState.get(env)
+        state.update(env)
+        dist_pocket = (state.orange_pos - state.pocket_pos).norm(dim=-1)
+        potential = dist_pocket.clamp(max=RETREAT_REWARD_TARGET_M)
+        gate = (
+            (state.progress.stage == int(PickStage.RELEASE))
+            & (state.orange_local[:, 0].abs() < PLACE_INSIDE_XY_M)
+            & (state.orange_local[:, 1].abs() < PLACE_INSIDE_XY_M)
+        )
+        retreat = (potential - self._prev_dist) / retreat_scale
+        pay = torch.where(self._has_prev & gate, retreat, torch.zeros_like(retreat))
+        self._prev_dist.copy_(potential)
+        self._has_prev.fill_(True)
+        return pay
+
+
+class SafeReleaseRetreat(reward_release_retreat):
+    """reward_release_retreat 的 NaN 防护版（与 SafeLiftRise 同模式）。"""
 
     def __call__(self, env):
         return torch.nan_to_num(super().__call__(env), nan=0.0, posinf=1.0, neginf=-1.0)
@@ -667,26 +752,66 @@ def reward_transport_progress(env: ManagerBasedRLEnv, std: float = 0.15) -> torc
 
 
 def reward_place_descent(env: ManagerBasedRLEnv) -> torch.Tensor:
-    """阶段 6：盒局部系内接近释放位 + 盒内空间指示。"""
+    """阶段 6：盒局部系内接近释放位 + 盒内空间指示。
+
+    深度峰值 2026-09-26 由 0.03（盒内正中）抬到 0.042：盒口 0.05，峰值停在
+    口下方 8mm——爪不必跟到盒底，松爪后橘子短距落入即可，直接降低爪/腕蹭
+    盒壁的几何压力（用户实测放橘子常碰盒）。
+    """
     state = StagedPickState.get(env)
     state.update(env)
     inside_xy = (
         (state.orange_local[:, 0].abs() < PLACE_INSIDE_XY_M) & (state.orange_local[:, 1].abs() < PLACE_INSIDE_XY_M)
     ).float()
-    depth = 1.0 - torch.tanh((state.orange_local[:, 2] - 0.03).abs() / 0.05)
+    depth = 1.0 - torch.tanh((state.orange_local[:, 2] - 0.042).abs() / 0.05)
     return inside_xy * depth * _gate(env, int(PickStage.PLACE))
 
 
-def reward_release_open(env: ManagerBasedRLEnv) -> torch.Tensor:
-    """阶段 7：盒内正确松爪（开度上升）+ 橘子速度收敛。"""
-    state = StagedPickState.get(env)
-    state.update(env)
-    inside = (
-        (state.orange_local[:, 0].abs() < PLACE_INSIDE_XY_M) & (state.orange_local[:, 1].abs() < PLACE_INSIDE_XY_M)
-    ).float()
-    open_frac = (state.gripper_pos / GRIPPER_TRAVEL_RAD).clamp(0, 1)
-    calm = 1.0 - torch.tanh(state.orange_vel.norm(dim=-1) / 0.3)
-    return inside * open_frac * calm * _gate(env, int(PickStage.RELEASE))
+class reward_release_open(ManagerTermBase):
+    """阶段 7：势能差塑形——付「爪开度增量」（lift_rise 同款防刷分结构）。
+
+    旧版付 open_frac×calm 的状态积：RELEASE 段开着爪悬在盒口每步持续领分
+    （实测 +0.65/局），与撤退形成竞争吸引子——策略学会停在爪距 5.4cm 悬停
+    领津贴而不是撤离过成功门（2026-09-27 实测 model_2000：400 采样爪距钉
+    5.1-5.5cm、撤退分仅 +0.04、0/32 成功）。改势能差：开度每增加
+    ``open_scale`` 付一单位，合拢对称倒扣，悬停不付、每局总支付被开度
+    行程界住——只教「松爪」这一个动作，不补贴驻留。门控：RELEASE 段 +
+    橘子在盒内（xy）（PLACE 已完成，此时松爪必为正确动作，不再需要 calm
+    门）。防抖同款：无 clamp 严格 telescoping，往复净零。
+    """
+
+    def __init__(self, cfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self._prev_open = torch.zeros(self.num_envs, device=self.device)
+        self._has_prev = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+
+    def reset(self, env_ids=None) -> None:
+        ids = slice(None) if env_ids is None else env_ids
+        self._has_prev[ids] = False
+
+    def __call__(self, env: ManagerBasedRLEnv, open_scale: float = 0.1) -> torch.Tensor:
+        state = StagedPickState.get(env)
+        state.update(env)
+        open_frac = (state.gripper_pos / GRIPPER_TRAVEL_RAD).clamp(0, 1)
+        gate = (
+            (state.progress.stage == int(PickStage.RELEASE))
+            & (state.orange_local[:, 0].abs() < PLACE_INSIDE_XY_M)
+            & (state.orange_local[:, 1].abs() < PLACE_INSIDE_XY_M)
+        )
+        opening = (open_frac - self._prev_open) / open_scale
+        pay = torch.where(self._has_prev & gate, opening, torch.zeros_like(opening))
+        self._prev_open.copy_(open_frac)
+        self._has_prev.fill_(True)
+        return pay
+
+
+class SafeReleaseOpen(reward_release_open):
+    """reward_release_open 的 NaN 防护版（与 SafeLiftRise 同模式）。"""
+
+    def __call__(self, env, open_scale: float = 0.1):
+        return torch.nan_to_num(
+            super().__call__(env, open_scale=open_scale), nan=0.0, posinf=1.0, neginf=-1.0
+        )
 
 
 class reward_stage_complete(ManagerTermBase):
@@ -750,6 +875,45 @@ def penalty_ee_bad_contact(
     return ((state.claw_force > threshold) & not_orange).float()
 
 
+class penalty_box_contact(ManagerTermBase):
+    """搬运开始后盒体受力惩罚（爪/腕压盒壁的直接信号，连续 ``confirm_steps`` 步才罚）。
+
+    2026-09-26 用户实测放橘子常蹭盒。此前爪-盒接触零成本：ee_collision 对
+    「爪中有橘子」豁免（压壁时橘子正在爪里，永远命中豁免）、box_disturbed
+    只罚位移、box_tipped 只罚翻倒。本项直读盒体接触传感器：TRANSPORT 起
+    盒体净力 > threshold 连续 confirm_steps 步才罚。传感器由
+    PickRLSceneCfg.box_contact 提供。
+
+    2026-09-27 探针实测（16 envs × 60 步）改为持续确认制：net_forces_w 是
+    全部接触的合力，含桌面支撑——空盒静置中位 1.46N（=盒重 0.14-0.16kg）、
+    橘子入盒后仍在同量级（Newton 求解器对盒-橘静接触读数偏低），但求解器
+    瞬态尖峰可到 5.4N（>2N 步占比 0.7-2.3%）。旧的瞬时二值判罚把这些
+    1-2 步尖峰也当压壁罚，给价值函数注入噪声；爪/腕真正压壁是持续多步
+    >2N——连续 3 步确认即可区分（橘子落入盒的冲击同样只有 1-2 步）。
+    旧版 -4.0/步的量级也顺带下修到 -2.0（与 ee_collision 同档）。
+    """
+
+    def __init__(self, cfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self._streak = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
+    def reset(self, env_ids=None) -> None:
+        ids = slice(None) if env_ids is None else env_ids
+        self._streak[ids] = 0
+
+    def __call__(
+        self, env: ManagerBasedRLEnv, threshold: float = 2.0, confirm_steps: int = 3
+    ) -> torch.Tensor:
+        state = StagedPickState.get(env)
+        state.update(env)
+        sensor = env.scene.sensors["box_contact"]
+        force = _t(sensor.data.net_forces_w).reshape(env.num_envs, -1, 3).norm(dim=-1).squeeze(-1)
+        gate = state.progress.stage >= int(PickStage.TRANSPORT)
+        hot = (force > threshold) & gate
+        self._streak = torch.where(hot, self._streak + 1, torch.zeros_like(self._streak))
+        return (self._streak >= confirm_steps).float()
+
+
 def penalty_workspace(env: ManagerBasedRLEnv) -> torch.Tensor:
     """口袋离开安全工作空间（桌面矩形上方带）。"""
     state = StagedPickState.get(env)
@@ -771,11 +935,49 @@ def penalty_workspace(env: ManagerBasedRLEnv) -> torch.Tensor:
 # ---------------------------------------------------------------------- #
 
 
+def _debug_release(env: ManagerBasedRLEnv, state: StagedPickState) -> None:
+    """PICK_DEBUG_RELEASE=1 时按 1Hz 打印每环境 RELEASE 未满足项。
+
+    阈值与上方条件表完全一致，只读状态不参与仿真逻辑；默认关闭零开销。
+    用于 play 可视化时回答「为什么还不算成功」。
+    """
+    if os.environ.get("PICK_DEBUG_RELEASE", "") != "1":
+        return
+    now = time.monotonic()
+    if now - _debug_release.last_t < 1.0:
+        return
+    _debug_release.last_t = now
+
+    dist_pocket = (state.orange_pos - state.pocket_pos).norm(dim=-1)
+    checks = (
+        ("盒内xy", state.orange_local[:, :2].abs().amax(dim=-1) < PLACE_INSIDE_XY_M),
+        (
+            "盒内z",
+            (state.orange_local[:, 2] > PLACE_INSIDE_Z_MIN_M)
+            & (state.orange_local[:, 2] < PLACE_INSIDE_Z_MAX_M),
+        ),
+        ("爪撤离", dist_pocket > state.release_clearance_m),
+        ("静置", state.orange_vel.norm(dim=-1) < RELEASE_SETTLED_SPEED_MPS),
+    )
+    parts = []
+    for i in range(env.num_envs):
+        stage = STAGE_NAMES[int(state.progress.stage[i])]
+        missing = [name for name, ok in checks if not bool(ok[i])]
+        stable = int(state.progress.stable_count[i])
+        suffix = f"缺:{'|'.join(missing)}" if missing else "全满足"
+        parts.append(f"env{i}[{stage}] 确认{stable}/10 爪距{dist_pocket[i] * 100:.1f}cm {suffix}")
+    print("[RELEASE诊断] " + " | ".join(parts), flush=True)
+
+
+_debug_release.last_t = 0.0
+
+
 def staged_success(env: ManagerBasedRLEnv) -> torch.Tensor:
     """成功 = RELEASE 稳定确认（StageProgress 已含连续稳定计数）。"""
     state = StagedPickState.get(env)
     state.update(env)
     state.log_metrics(env)
+    _debug_release(env, state)
     return state.progress.success
 
 
@@ -865,7 +1067,8 @@ safe_reward_lift_height = _nan_safe(reward_lift_height)
 safe_reward_stabilize_calm = _nan_safe(reward_stabilize_calm)
 safe_reward_transport_progress = _nan_safe(reward_transport_progress)
 safe_reward_place_descent = _nan_safe(reward_place_descent)
-safe_reward_release_open = _nan_safe(reward_release_open)
+# reward_release_open 已改为带状态的 ManagerTermBase 类，见上方
+# SafeReleaseOpen（不能用 _nan_safe 函数包装）
 safe_reward_final_success = _nan_safe(reward_final_success)
 safe_penalty_premature_release = _nan_safe(penalty_premature_release)
 safe_penalty_workspace = _nan_safe(penalty_workspace)
@@ -875,6 +1078,23 @@ safe_orange_disturbed = _nan_safe(v0.orange_disturbed)
 safe_arm_collision = _nan_safe(v0.arm_collision)
 safe_ee_bad_contact = _nan_safe(v0.ee_bad_contact)
 safe_penalty_ee_bad_contact = _nan_safe(penalty_ee_bad_contact)
+
+
+class SafeBoxContact(penalty_box_contact):
+    """penalty_box_contact 的 NaN 防护版（与 SafeLiftRise 同模式）。
+
+    penalty_box_contact 已改为带连续确认状态的 ManagerTermBase，不能用
+    _nan_safe 函数包装，改用子类遮蔽 __call__。签名与父类保持一致（显式
+    threshold/confirm_steps），满足 Manager 按签名校验奖励项参数的约定。
+    """
+
+    def __call__(self, env, threshold: float = 2.0, confirm_steps: int = 3):
+        return torch.nan_to_num(
+            super().__call__(env, threshold=threshold, confirm_steps=confirm_steps),
+            nan=0.0,
+            posinf=1.0,
+            neginf=-1.0,
+        )
 
 
 class SafeStageComplete(reward_stage_complete):

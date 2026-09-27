@@ -102,8 +102,13 @@ PLACE_INSIDE_Z_MAX_M = 0.052
 PLACE_JAW_NEAR_M = 0.10
 
 # 阶段 7 RELEASE 完成 = 最终成功：橘子在盒内 + 夹爪已离开 + 速度收敛，
-# 连续 RELEASE_STABLE_STEPS 步确认（盒内静置橘子速度量级 <0.05 m/s）。
+# 确认计数净攒满 RELEASE_STABLE_STEPS 步（防抖见 StageProgress.update）。
+# 双轨口径（2026-09-27 用户定版）：成功门训练/部署统一 5.5cm；撤退奖励
+# 的势能饱和线 7cm——奖励把爪均值推到 7cm，成功判定在 5.5cm，中间
+# 1.5cm 吸收 σ0.15 采样噪声（此前门=饱和线=0.07 的零裕度结构实测把
+# 10 步确认变成不可能事件，成功率钉 1%）。
 RELEASE_CLEARANCE_M = 0.055
+RETREAT_REWARD_TARGET_M = 0.07
 RELEASE_SETTLED_SPEED_MPS = 0.15
 RELEASE_STABLE_STEPS = 10
 
@@ -242,10 +247,19 @@ class StageProgress:
             elif name == "PLACE":
                 self.in_box_latched |= raw
 
-        # RELEASE 阶段完成 = 最终成功：连续 RELEASE_STABLE_STEPS 步满足
+        # RELEASE 阶段完成 = 最终成功：确认计数净攒满 RELEASE_STABLE_STEPS 步。
+        # 2026-09-27 防抖：条件断开一步由清零改为 -2（下限 0）——净攒满要求
+        # 在线率 >2/3。σ0.15 采样噪声下爪距围绕均值 ±1-2cm 抖动，旧版"断一
+        # 步即清零"让 10 连几乎不可能（成功率钉 1%）；防抖后偶发回踩只回退
+        # 两步，而悬停/戳橘子（在线率≪2/3）依旧净减永远攒不满，不放松对
+        # "实质驻留门外+静置"的要求，也不打开刷分口子（成功是一次性终局奖）。
         release_ready = gate & cond.get("RELEASE", torch.zeros_like(self.success))
         self.stable_count.copy_(
-            torch.where(release_ready, self.stable_count + 1, torch.zeros_like(self.stable_count))
+            torch.where(
+                release_ready,
+                self.stable_count + 1,
+                (self.stable_count - 2).clamp_min(0),
+            )
         )
         newly_successful = (~self.success) & (self.stable_count >= RELEASE_STABLE_STEPS)
         self.time_to_success = torch.where(newly_successful, step, self.time_to_success)

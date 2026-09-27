@@ -282,7 +282,10 @@ class StagedEventsCfg:
     reset_staged = EventTerm(
         func=staged_mdp.StagedReset,
         mode="reset",
-        params={"dataset_path": "", "forced_stage": None},
+        params={
+            "dataset_path": "",
+            "forced_stage": None,
+        },
     )
 
 
@@ -292,7 +295,8 @@ class StagedRewardsCfg:
 
     稠密项每阶段一个（门控于当前阶段，有效值 ~0.2-1.0/步）；一次性阶段
     完成 bonus=(3,4,6,8,8,10,14,30)（weight×dt=1 → bonus 即有效值）与终
-    局成功 +20；惩罚复用 v0 的扰动/碰撞项并新增过早松爪/工作空间违规。
+    局成功 +20；惩罚复用 v0 的扰动/碰撞项并新增过早松爪/工作空间违规/
+    盒体受力（TRANSPORT 起，爪压盒壁的直接信号）。
     """
 
     # --- 八阶段稠密 ---
@@ -309,7 +313,17 @@ class StagedRewardsCfg:
     stabilize_calm = RewTerm(func=staged_mdp.safe_reward_stabilize_calm, weight=0.6)
     transport_progress = RewTerm(func=staged_mdp.safe_reward_transport_progress, weight=0.6)
     place_descent = RewTerm(func=staged_mdp.safe_reward_place_descent, weight=0.6)
-    release_open = RewTerm(func=staged_mdp.safe_reward_release_open, weight=0.8)
+    # 松爪塑形（2026-09-27 改势能差）：旧状态积版在 RELEASE 段开爪悬停
+    # 每步领分（实测 +0.65/局），与撤退竞争吸引子、策略钉在爪距 5.4cm 不
+    # 撤离；新版只为「张开动作本身」付一次分，悬停零收入
+    release_open = RewTerm(func=staged_mdp.SafeReleaseOpen, weight=0.8)
+    # RELEASE 段撤退塑形（饱和势能差）：势能在 0.07（RETREAT_REWARD_TARGET_M）
+    # 饱和且无 clamp——退到 0.07m 奖励拿满、之后零支付，往复严格
+    # telescoping 净零；成功门另挂 0.055（stages.py），1.5cm 差值吸收 σ0.15
+    # 噪声。权重 10→30（2026-09-27）：从放置姿态 5.4cm 撤到 7cm 原只值
+    # ~+1 有效分拉不动策略（实测 400 采样钉 5.1-5.5cm 不撤）；×3 后 ≈+3.2，
+    # 对标阶段 bonus 量级（3-30），每局上限仍有界（~14 units×30×dt）
+    release_retreat = RewTerm(func=staged_mdp.SafeReleaseRetreat, weight=30.0)
 
     # --- 一次性：八阶段完成 + 终局成功 ---
     stage_complete = RewTerm(func=staged_mdp.SafeStageComplete, weight=30.0)
@@ -322,9 +336,17 @@ class StagedRewardsCfg:
     arm_collision = RewTerm(func=staged_mdp.safe_arm_collision, weight=-3.0)
     # staged 版：近距门用口袋距（v0 的 dist_jaw 几何恒 9-12cm，真实夹持会被误罚）
     ee_collision = RewTerm(func=staged_mdp.safe_penalty_ee_bad_contact, weight=-2.0)
+    # 爪/腕压盒壁（2026-09-26 引入，2026-09-27 改持续确认制）：TRANSPORT 起
+    # 盒体净力 >2N 连续 3 步才罚——瞬时判罚会把求解器尖峰（探针实测静置
+    # 中位 1.46N、尖峰 5.4N、>2N 占比 0.7-2.3%）和橘子落盒冲击当压壁。
+    # 权重 -4→-2：-4/步量级过猛（det_align_v1 崩塌诱因之一），与
+    # ee_collision 同档，真实压壁 10 步 ≈ -0.7 有效
+    box_contact = RewTerm(func=staged_mdp.SafeBoxContact, weight=-2.0)
     premature_release = RewTerm(func=staged_mdp.safe_penalty_premature_release, weight=-1.0)
     workspace = RewTerm(func=staged_mdp.safe_penalty_workspace, weight=-0.5)
-    action_rate = RewTerm(func=action_rate_l2, weight=-0.005)
+    # 抖动惩罚加倍（2026-09-26）：std 上界降到 0.15 后该项才真正开始约束
+    # 策略输出的高频振荡（此前被 σ0.3 采样噪声淹没，确定性推理抖动现形）
+    action_rate = RewTerm(func=action_rate_l2, weight=-0.01)
 
     orange_dropped = RewTerm(
         func=is_terminated_term, weight=-600.0, params={"term_keys": "staged_orange_dropped"}
@@ -377,6 +399,8 @@ class StagedPickAppleEnvCfg(PickAppleEnvCfg):
         super().play_mode()
         # 完整任务评估的出生策略（用户核心指标）：home-only，不使用中段出生
         self.events.reset_staged.params["forced_stage"] = 0
+        # RELEASE 成功门 0.055 已统一训练/部署口径（2026-09-27 双轨定版：
+        # 成功门 0.055 + 撤退奖励饱和线 0.07，见 stages.py），无需再覆盖
 
 
 @configclass
