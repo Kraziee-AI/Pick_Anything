@@ -77,23 +77,7 @@ manager-based RL 环境，场景资产与 demo 完全共用。任务状态机（
 终止：成功入盒、苹果离桌、纸盒翻倒/飞出、关节速度 >25 rad/s、超时 12s。
 课程：reset 事件按成功率 EMA 扩大刷位范围（难度 0.2→1.0）。
 
-```bash
-# 训练（在 Pick_Anything 根目录下运行，日志/模型写入 ./output/）
-python scripts/train_pick.py --rl_library rsl_rl --task Pick-Apple-SO101-v0 \
-    --num_envs 1024 --max_iterations 13000 --seed 42 --device cuda:0 --viz none \
-    agent.experiment_name=/home/user123/IsaacLab_6.1/Pick_Anything/output
 
-# 回放训练好的策略（GUI）
-python scripts/play_pick.py --rl_library rsl_rl --task Pick-Apple-SO101-v0 \
-    --num_envs 4 --checkpoint output/<run>/model_XXXX.pt --viz kit
-
-# 环境逻辑探针（无头，验证状态机/奖励/终止接线）
-python scripts/probe_pick_env.py --num_envs 4
-```
-
-**资源约束（实测）**：本机 62GB 内存与他人任务共存时，该场景约 30MB/环境——
-1024 envs 稳定（~38GB），2048/4096/8192 会被 OOM killer 杀掉。
-若机器空出来，可逐步上调 `--num_envs`（lift 项目 2×4096 双卡曾可行）。
 
 ## 结构
 
@@ -124,12 +108,6 @@ scripts/
 
 
 
-
-
-
-
-
-
 #八阶段每个阶段reset状态
   cd /home/user123/IsaacLab_6.1/Pick_Anything
   export PYTHONNOUSERSITE=1 PXR_WORK_THREAD_LIMIT=1
@@ -139,4 +117,41 @@ scripts/
     --visualizer newton \
     --per_stage 15 \
     --steps_per_pose 30
+    
+#训练
+# CUDA_VISIBLE_DEVICES 让进程只看得见物理 1 卡（映射为 cuda:0）——单进程模式下
+
+CUDA_VISIBLE_DEVICES=1 python scripts/train_pick.py --rl_library rsl_rl --task Pick-Apple-SO101-Staged-v0 \
+      --num_envs 4096 --device cuda:0 --seed 42 --max_iterations 13000 --viz none \
+      --run_name det_align_v1
+
+#tensorboard
+tensorboard --logdir ~/IsaacLab_6.1/Pick_Anything/logs/rsl_rl/pick_apple_staged_so101/2026-09-27_11-40-52_det_align_v1 --port 6006 --host 127.0.0.1
+
+#推理（同样用 CUDA_VISIBLE_DEVICES 锁单卡，推理放 0 卡，因为欺骗器在0显卡插着）
+  export LD_PRELOAD=$CONDA_PREFIX/lib/python3.12/site-packages/nvidia/cuda_runtime/lib/libcudart.so.12
+
+  CUDA_VISIBLE_DEVICES=0 python scripts/play_pick.py --rl_library rsl_rl --task Pick-Apple-SO101-Staged-v0 \
+      --num_envs 4 --device cuda:0 \
+      --checkpoint logs/rsl_rl/pick_apple_staged_so101/2026-09-26_16-19-15_retreat_shaping_v2/model_12999.pt \
+      --viz kit
+  #可以任意显卡
+  LD_PRELOAD=/home/user123/miniconda3/envs/isaaclab_61/lib/python3.12/site-packages/nvidia/cuda_runtime/lib/libcudart.so.12 \
+  python scripts/play_pick.py --rl_library rsl_rl \
+    --task Pick-Apple-SO101-Staged-v0 \
+    --num_envs 4 --device cuda:2 --viz kit \
+    --checkpoint logs/rsl_rl/pick_apple_staged_so101/2026-09-27_14-57-13_det_align_v1/model_1750.pt
+
+
+#确定性评估（验收口径：play 只跑均值动作，train 曲线的 sampled success 只当参考）
+  export PYTHONNOUSERSITE=1 PXR_WORK_THREAD_LIMIT=1
+  CUDA_VISIBLE_DEVICES=2 python scripts/eval_pick_home.py --rl_library rsl_rl --task Pick-Apple-SO101-Staged-v0 \
+      --num_envs 256 --device cuda:0 \
+      --checkpoint logs/rsl_rl/pick_apple_staged_so101/<run>/model_XXXX.pt \
+      --external_callback scripts.eval_pick_home:install_episode_counter \
+      --viz none
+  # 输出找 PICK_APPLE_EVAL_RESULT= 一行（success_rate 即 home 出生完整任务的确定性成功率）
+  # PICK_DEBUG_RELEASE=1 可选：play 时 1Hz 打印每环境 RELEASE 未满足项
+
+
 
