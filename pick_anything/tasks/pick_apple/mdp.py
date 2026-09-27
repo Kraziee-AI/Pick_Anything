@@ -294,8 +294,9 @@ class PickState:
         self.device = env.device
         n = env.num_envs
         robot = env.scene["robot"]
-        self.jaw_id = int(robot.find_bodies(["jaw"])[0][0])
-        self.gripper_id = int(robot.find_bodies(["gripper"])[0][0])
+        # 动指 body 名：isaaclab_assets SO101 为 moving_jaw_so101_v1（旧
+        # leisaac USD 叫 jaw，2026-09-25 换资产后此处漏改导致首次 reset 崩溃）
+        self.jaw_id = int(robot.find_bodies(["moving_jaw_so101_v1"])[0][0])
         self.gripper_id = int(robot.find_joints(["gripper"])[0][0])
 
         # geometry caches (env-local frame, i.e. world minus env origin)
