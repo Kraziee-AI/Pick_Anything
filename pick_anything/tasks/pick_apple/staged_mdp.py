@@ -90,7 +90,9 @@ LIFT_RISE_CAP_MARGIN_M = 0.02
 CURRICULUM_EARLY = (0.40, 0.20, 0.15, 0.08, 0.04, 0.04, 0.05, 0.04)
 # mid: 覆盖抓取-抬起-搬运（中段密集练习）
 CURRICULUM_MID = (0.20, 0.12, 0.12, 0.12, 0.10, 0.10, 0.12, 0.12)
-# late: home 为主（收敛完整任务），后期阶段保底非零
+# late: home 为主（收敛完整任务），后期阶段保底非零。
+# 相机版任务通过 reset term 参数 curriculum_late 覆盖本表（见
+# camera_env_cfg.py 的 CAMERA_CURRICULUM_LATE，2026-09-28 断层带加权复盘）
 CURRICULUM_LATE = (0.50, 0.16, 0.10, 0.06, 0.04, 0.04, 0.06, 0.04)
 CURRICULUM_MID_RESETS = 20_000  # 累计 reset 次数达到该值时进入 mid
 CURRICULUM_LATE_RESETS = 120_000
@@ -316,11 +318,19 @@ class StagedPickState:
 # ---------------------------------------------------------------------- #
 
 
-def curriculum_weights(reset_count: int) -> torch.Tensor:
-    """三档出生权重按累计 reset 次数线性插值（home 全程非零）。"""
-    early = torch.tensor(CURRICULUM_EARLY, dtype=torch.float32)
-    mid = torch.tensor(CURRICULUM_MID, dtype=torch.float32)
-    late = torch.tensor(CURRICULUM_LATE, dtype=torch.float32)
+def curriculum_weights(reset_count: int, early: tuple[float, ...] | None = None,
+                       mid: tuple[float, ...] | None = None,
+                       late: tuple[float, ...] | None = None) -> torch.Tensor:
+    """三档出生权重按累计 reset 次数线性插值（home 全程非零）。
+
+    三档均允许任务级覆盖（缺省用模块常量 CURRICULUM_EARLY/MID/LATE）——
+    相机版断层带加权只覆盖 late 档；蒸馏 v2 的相位均匀 reset（教程
+    IsaacLabTutorial 同款）需要三档全覆盖：90s 细粒度 episode 下 reset
+    计数涨得慢，只改 late 档则大部分训练时间泡在 early/mid 的 home 加权里。
+    """
+    early = torch.tensor(early if early is not None else CURRICULUM_EARLY, dtype=torch.float32)
+    mid = torch.tensor(mid if mid is not None else CURRICULUM_MID, dtype=torch.float32)
+    late = torch.tensor(late if late is not None else CURRICULUM_LATE, dtype=torch.float32)
     if reset_count >= CURRICULUM_LATE_RESETS:
         return late
     if reset_count >= CURRICULUM_MID_RESETS:
@@ -349,7 +359,8 @@ def silence_mjwarp_overflow_warning(env: ManagerBasedRLEnv) -> None:
 class StagedReset(ManagerTermBase):
     """八阶段出生：按课程从 reset 状态库采样，缺失阶段报警并安全回退。
 
-    * 阶段 0（HOME）：v0 同款随机刷位（难度课程保留）。
+    * 阶段 0（HOME）：v0 同款随机刷位（难度课程保留）；传 home_orange_window
+      时 HOME 行橘子改在窗口内均匀采样（相机版 v1：出生即入镜，盲搜变视觉伺服）。
     * 阶段 >=1：从 reset 状态库恢复「关节位置+控制器目标+橘子/纸盒位姿」，
       并按行 stage 种子化阶段锁存（出生即有的进度不发奖）。
     * 任何中段阶段样本数 < MIN_SAMPLES_PER_STAGE 时打印 WARNING 并把该阶
@@ -365,6 +376,50 @@ class StagedReset(ManagerTermBase):
         super().__init__(cfg, env)
         self.dataset_path = str(cfg.params.get("dataset_path", "") or "")
         self.forced_stage = cfg.params.get("forced_stage", None)
+        # 任务级课程覆盖（相机版断层带加权只覆盖 late 档；蒸馏 v2 相位均匀
+        # reset 三档全覆盖；缺省 None 走模块常量，随机数流一位不偏）
+        self.curriculum_early = cfg.params.get("curriculum_early", None)
+        self.curriculum_mid = cfg.params.get("curriculum_mid", None)
+        self.curriculum_late = cfg.params.get("curriculum_late", None)
+        # HOME 行橘子刷位窗口（相机版 v1：出生即入镜，盲搜变视觉伺服）。
+        # 缺省 None 完全跳过（状态线/蒸馏线的随机数流一位不偏）；给了则
+        # 钳到 fruit 矩形内并与矩形求交，空交集 fail fast。
+        self.home_orange_window = cfg.params.get("home_orange_window", None)
+        if self.home_orange_window is not None:
+            x_lo, x_hi, y_lo, y_hi = map(float, self.home_orange_window)
+            if x_lo >= x_hi or y_lo >= y_hi:
+                raise ValueError(
+                    f"[StagedReset] home_orange_window 非法（需 x_lo<x_hi 且 y_lo<y_hi）: {self.home_orange_window}"
+                )
+            (fx0, fx1), (fy0, fy1) = v0._RECTS["fruit"]
+            x_lo, x_hi = max(x_lo, fx0), min(x_hi, fx1)
+            y_lo, y_hi = max(y_lo, fy0), min(y_hi, fy1)
+        # HOME 行盒子刷位窗口（蒸馏 v4：出生画面橘子+盒子同框——2026-10-02
+        # 用户定方向，对齐教程「出生即见任务目标」。窗口须落在盒矩形内；
+        # 与橘子窗口的 13.5cm 间隙在 __call__ 里单调向窗口深处推，几何上
+        # 窗口深 16cm 必然可解。缺省 None 完全跳过（随机数流不偏）。
+        self.home_box_window = cfg.params.get("home_box_window", None)
+        if self.home_box_window is not None:
+            bx_lo, bx_hi, by_lo, by_hi = map(float, self.home_box_window)
+            if bx_lo >= bx_hi or by_lo >= by_hi:
+                raise ValueError(
+                    f"[StagedReset] home_box_window 非法（需 x_lo<x_hi 且 y_lo<y_hi）: {self.home_box_window}"
+                )
+            (bxr0, bxr1), (byr0, byr1) = v0._RECTS["box"]
+            bx_lo, bx_hi = max(bx_lo, bxr0), min(bx_hi, bxr1)
+            by_lo, by_hi = max(by_lo, byr0), min(by_hi, byr1)
+            if bx_lo >= bx_hi or by_lo >= by_hi:
+                raise ValueError(
+                    f"[StagedReset] home_box_window {self.home_box_window} 与 box 矩形 "
+                    f"x[{bxr0},{bxr1}] y[{byr0},{byr1}] 空交集"
+                )
+            self.home_box_window = (bx_lo, bx_hi, by_lo, by_hi)
+            if x_lo >= x_hi or y_lo >= y_hi:
+                raise ValueError(
+                    f"[StagedReset] home_orange_window {self.home_orange_window} 与 fruit 矩形 "
+                    f"x∈[{fx0},{fx1}] y∈[{fy0},{fy1}] 无交集"
+                )
+            self.home_orange_window = (x_lo, x_hi, y_lo, y_hi)
         self.bank = None
         if self.dataset_path:
             artifact = load_reset_dataset(self.dataset_path, device=env.device)
@@ -384,8 +439,16 @@ class StagedReset(ManagerTermBase):
             self.counts = torch.zeros(NUM_STAGES, device=env.device)
 
     def __call__(self, env: ManagerBasedRLEnv, env_ids: torch.Tensor,
-                 dataset_path: str = "", forced_stage: int | None = None) -> None:
-        del dataset_path, forced_stage
+                 dataset_path: str = "", forced_stage: int | None = None,
+                 curriculum_early: tuple[float, ...] | None = None,
+                 curriculum_mid: tuple[float, ...] | None = None,
+                 curriculum_late: tuple[float, ...] | None = None,
+                 home_orange_window: tuple[float, float, float, float] | None = None,
+                 home_box_window: tuple[float, float, float, float] | None = None) -> None:
+        # 七个参数都在 __init__ 里经 cfg.params 消费；签名保留仅为通过
+        # EventManager 的 term 参数校验（manager_base._resolve_common_term_cfg）
+        del dataset_path, forced_stage, curriculum_early, curriculum_mid, curriculum_late
+        del home_orange_window, home_box_window
         silence_mjwarp_overflow_warning(env)  # 幂等；每次 reset 重断言防求解器重建后复活
         state = StagedPickState.get(env)
         state.on_env_reset(env, env_ids)
@@ -396,7 +459,8 @@ class StagedReset(ManagerTermBase):
         if self.forced_stage is not None:
             stage_pick = torch.full((n,), int(self.forced_stage), dtype=torch.long, device=device)
         else:
-            weights = curriculum_weights(state.reset_count).to(device)
+            weights = curriculum_weights(state.reset_count, early=self.curriculum_early,
+                                         mid=self.curriculum_mid, late=self.curriculum_late).to(device)
             usable = weights.clone()
             usable[1:][self.counts[1:] < MIN_SAMPLES_PER_STAGE] = 0.0
             if float(usable.sum()) <= 0.0:
@@ -429,6 +493,41 @@ class StagedReset(ManagerTermBase):
                 bank_rows.append((sel, pick))
                 covered[sel] = True
             stage_pick = torch.where(covered, stage_pick, torch.zeros_like(stage_pick))
+
+        # HOME 行橘子刷进腕摄可见窗口（相机版 v1 盲搜修复；窗口在 __init__
+        # 已钳入 fruit 矩形。None 时整块跳过、零额外随机数消耗——状态线/
+        # 蒸馏线的随机数流与旧版逐位一致）。box 间隙用现成 _push_apart 兜底
+        # （窗口与盒区本不重叠，触发即微推，不会推离窗口太远）。
+        if self.home_orange_window is not None:
+            home = stage_pick == 0
+            if home.any():
+                x_lo, x_hi, y_lo, y_hi = self.home_orange_window
+                k = int(home.sum())
+                win_xy = torch.empty(k, 2, device=device)
+                win_xy[:, 0].uniform_(x_lo, x_hi)
+                win_xy[:, 1].uniform_(y_lo, y_hi)
+                if self.home_box_window is not None:
+                    # 蒸馏 v4：盒子也刷进可见窗口（出生画面橘子+盒子同框）。
+                    # 间隙用单调 y-推：橘子窗口 y≥-0.34、盒窗深 16cm，任意 dx
+                    # 下都能在窗内解出 13.5cm 中心距（dx≥clear 时零位移）。
+                    bx_lo, bx_hi, by_lo, by_hi = self.home_box_window
+                    bxy = torch.empty(k, 2, device=device)
+                    bxy[:, 0].uniform_(bx_lo, bx_hi)
+                    bxy[:, 1].uniform_(by_lo, by_hi)
+                    dx = bxy[:, 0] - win_xy[:, 0]
+                    dy_need = (v0.BOX_FRUIT_CLEAR_M**2 - dx**2).clamp_min(0.0).sqrt()
+                    bxy[:, 1] = torch.minimum(bxy[:, 1], win_xy[:, 1] - dy_need).clamp(by_lo, by_hi)
+                    placements["box"][home] = bxy
+                else:
+                    # 盒子间隙兜底：推盒子、不推橘子——推橘子会被 _push_apart 的
+                    # 「矩形中心」二段兜底甩出窗口（盒带顶 y=-0.39 距窗口底仅 5cm，
+                    # 间隙 13.5cm 必触发），恰好重建要修的盲搜出生。盒子只在自家
+                    # 矩形内被微推（同 v0 _snap_box_clear 推托盘保果的取向），
+                    # 位移参考点 spawn_box_xy 已跟随实际写入位姿。
+                    placements["box"][home] = v0._push_apart(
+                        placements["box"][home], win_xy, v0.BOX_FRUIT_CLEAR_M, kind="box"
+                    )
+                placements["orange"][home] = win_xy
 
         # 机器人：bank 行恢复关节位置/速度/目标
         robot = env.scene["robot"]
@@ -1041,6 +1140,18 @@ def safe_last_action(env):
     from isaaclab.envs.mdp import last_action
 
     return torch.nan_to_num(last_action(env), nan=0.0, posinf=1.0, neginf=-1.0)
+
+
+def safe_joint_target(env):
+    """PD 关节目标（教程第 4 项本体，cam_v4 补齐）。
+
+    软伺服 + delta 动作下实际关节角受重力/接触反力滞后于目标，夹持时
+    pos 恒偏离 target——策略只有看到 target 才知道自己命令的闭合度
+    （教程 terms.joint_target：clamp ±4，防 NaN 同 safe 系列）。
+    """
+    robot = env.scene["robot"]
+    target = _t(robot.data.joint_pos_target)
+    return torch.nan_to_num(target, nan=0.0, posinf=4.0, neginf=-4.0).clamp(-4.0, 4.0)
 
 
 # ---------------------------------------------------------------------------
