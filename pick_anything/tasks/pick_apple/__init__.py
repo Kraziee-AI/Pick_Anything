@@ -202,3 +202,15 @@ gym.register(
         "default_agent": "rsl_rl",
     },
 )
+
+# Latest distillation: standalone raw-label/action configuration.
+gym.register(
+    id="Pick-Apple-SO101-Staged-Camera-Distill-v10",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.camera_distill_v10_cfg:CameraDistillV10PickAppleEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.camera_distill_v10_cfg:CameraDistillV10RunnerCfg",
+        "default_agent": "rsl_rl",
+    },
+)
