@@ -5,7 +5,7 @@
     python scripts/eval_pick_home.py --rl_library rsl_rl \
         --task Pick-Apple-SO101-Staged-v0 --num_envs 256 --device cuda:1 \
         --checkpoint logs/rsl_rl/pick_apple_staged_so101/<run>/model_XXXX.pt \
-        --external_callback scripts.eval_pick_home:install_episode_counter \
+        --external_callback scripts.eval_pick_home.install_episode_counter \
         --viz none
 
 机制（移植自参考项目 evaluation.py 的 wrapper patch 模式）：
@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -33,7 +34,13 @@ _TERMINATION_KEYS = ("success", "time_out", "staged_orange_dropped", "staged_box
 
 
 def install_episode_counter() -> list[str]:
-    """patch play 循环：精确计 N 个 home 出生 episode 并打印汇总。"""
+    """patch play 循环：精确计 N 个 home 出生 episode 并打印汇总。
+
+    可选帧转储（无显示器的纯 GPU 观看方式，环境变量开关，默认关）：
+    PICK_EVAL_SAVE_EVERY=N  每 N 控制步存一张 env_0 的腕摄帧（放大 PNG）
+    PICK_EVAL_SAVE_DIR=dir  输出目录（默认 photos/play_frames）
+    PICK_EVAL_SAVE_MAX=K    最多存 K 张（默认 400，防止刷盘）
+    """
     from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 
     target = EVALUATION_EPISODES
@@ -42,6 +49,29 @@ def install_episode_counter() -> list[str]:
     )
     counted: torch.Tensor | None = None
 
+    save_every = int(os.environ.get("PICK_EVAL_SAVE_EVERY", "0"))
+    save_dir = Path(os.environ.get("PICK_EVAL_SAVE_DIR", "photos/play_frames"))
+    save_max = int(os.environ.get("PICK_EVAL_SAVE_MAX", "400"))
+    saved = {"n": 0, "step": 0, "ep": 0}
+
+    def _dump_frame(env, tag: str) -> None:
+        if saved["n"] >= save_max:
+            return
+        try:
+            import numpy as np
+            from PIL import Image
+
+            frame = env.scene.sensors["wrist_camera"].data.output["rgb"][0]
+            img = frame[..., :3].detach().cpu().numpy().astype(np.uint8)
+            h, w = img.shape[:2]
+            scale = max(1, 384 // h)
+            png = Image.fromarray(img).resize((w * scale, h * scale), Image.NEAREST)
+            save_dir.mkdir(parents=True, exist_ok=True)
+            png.save(save_dir / f"ep{saved['ep']:03d}_s{saved['step']:05d}_{tag}.png")
+            saved["n"] += 1
+        except Exception as exc:  # 转储失败不能影响评估
+            print(f"[eval-frames] skip: {exc}", flush=True)
+
     original_step = RslRlVecEnvWrapper.step
 
     def counted_step(self, actions):
@@ -49,7 +79,14 @@ def install_episode_counter() -> list[str]:
         if self.num_envs != target:
             raise RuntimeError(f"home-only 评估要求 --num_envs {target}（每环境恰好一局）")
         result = original_step(self, actions)
+        saved["step"] += 1
         dones = result[2].bool()
+        if save_every > 0 and bool(dones[0]):
+            _dump_frame(self.unwrapped, "done")
+            saved["ep"] += 1
+            _dump_frame(self.unwrapped, "reset")
+        elif save_every > 0 and saved["step"] % save_every == 0:
+            _dump_frame(self.unwrapped, "run")
         if counted is None:
             counted = torch.zeros_like(dones)
         done_ids = dones.nonzero(as_tuple=False).squeeze(-1)
