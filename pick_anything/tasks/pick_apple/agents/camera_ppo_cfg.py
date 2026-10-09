@@ -196,3 +196,30 @@ class CameraTutorialFixedLRPPOBaseRunnerCfg(RslRlOnPolicyRunnerCfg):
 @configclass
 class CameraTutorialFixedLRPPORunnerCfg(PresetCfg):
     default = CameraTutorialFixedLRPPOBaseRunnerCfg()
+
+
+# --------------------------------------------------------------------- #
+# 相机 v9（gym id: Pick-Apple-SO101-Staged-Camera-v9）：蒸馏学生 PPO 收尾
+# （2026-10-07 路线 A，用户批准）——actor 从 v9 蒸馏学生热启动（环境变量
+# PICK_PPO_ACTOR_FROM_DISTILL，见 agents/hybrid_ppo.HybridPPO），critic 从
+# --checkpoint（cam_v9 model_11999）热启动，optimizer 全新。**LR 3e-5**
+# （cam_v12 实证的防漂移档：1e-4 续训两次跑飞 91→61%，3e-5 登顶 92.19%）。
+# max_iterations 4000（256×192 渲染 ~12-15s/轮 ≈ 14-17h；蒸馏初始化起步
+# 即强，峰预期早现，save 100 供守护收割）。
+# --------------------------------------------------------------------- #
+
+
+@configclass
+class CameraFineTuneLowLRPPOBaseRunnerCfg(CameraTutorialFixedLRPPOBaseRunnerCfg):
+    """v9 混合续训 runner：v4/v5/v7/v8 的 PPO 配方 + LR 3e-5 + HybridPPO。"""
+
+    max_iterations = 4000
+    algorithm = CAMERA_ALGO_CFG.replace(
+        class_name="pick_anything.tasks.pick_apple.agents.hybrid_ppo:HybridPPO",
+        learning_rate=3.0e-5,
+    )
+
+
+@configclass
+class CameraFineTuneLowLRPPORunnerCfg(PresetCfg):
+    default = CameraFineTuneLowLRPPOBaseRunnerCfg()

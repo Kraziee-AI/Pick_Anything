@@ -173,3 +173,18 @@ gym.register(
         "default_agent": "rsl_rl",
     },
 )
+
+# 相机 v9：v8 + 腕摄 256×192——蒸馏学生 PPO 收尾（2026-10-07 路线 A）。
+# actor 从 v9 蒸馏学生热启动（环境变量 PICK_PPO_ACTOR_FROM_DISTILL，
+# agents/hybrid_ppo.HybridPPO），critic 从 --checkpoint 热启动，LR 3e-5。
+# v8 注册不动可复现
+gym.register(
+    id="Pick-Apple-SO101-Staged-Camera-v9",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.camera_env_cfg:CameraFineTuneHdEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.camera_ppo_cfg:CameraFineTuneLowLRPPORunnerCfg",
+        "default_agent": "rsl_rl",
+    },
+)

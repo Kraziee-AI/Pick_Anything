@@ -619,6 +619,25 @@ class CameraClosureFinetuneEnvCfg(CameraClosureScanHomeEnvCfg):
         self.events.reset_staged.params["curriculum_late"] = fixed
 
 
+@configclass
+class CameraFineTuneHdEnvCfg(CameraClosureFinetuneEnvCfg):
+    """相机 v9：v8 + 腕摄 256×192——蒸馏学生 PPO 收尾口径（gym id: Pick-Apple-SO101-Staged-Camera-v9）。
+
+    2026-10-07 路线 A（用户批准，见 agents/hybrid_ppo.py）：拿 v9 蒸馏学生
+    （distill_v9_hd256/model_500）做 PPO 初始化继续训练——**CNN 输入必须是
+    256×192**（与该学生的训练分辨率一致，分辨率不匹配=strict load 直接报错）。
+    与 distill v9 相同的覆写方式（scene.wrist_camera.width/height 在
+    __post_init__ 末尾覆盖，已验证生效）。其余全部继承 v8（闭包相机/O 姿态/
+    双窗口/固定 home-0.50 课程/90s/0.033/0.02/奖励 ×1/30）——cam_v12 已实证
+    该环境语义 + 低 LR + 守护收割 = 92.19%。
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.wrist_camera.width = 256
+        self.scene.wrist_camera.height = 192
+
+
 # --------------------------------------------------------------------- #
 # 蒸馏 v2 的细粒度特权教师（gym id: Pick-Apple-SO101-Staged-TeacherFine-v0）
 # --------------------------------------------------------------------- #
