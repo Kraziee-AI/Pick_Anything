@@ -148,10 +148,51 @@ tensorboard --logdir ~/IsaacLab_6.1/Pick_Anything/logs/rsl_rl/pick_apple_staged_
   CUDA_VISIBLE_DEVICES=2 python scripts/eval_pick_home.py --rl_library rsl_rl --task Pick-Apple-SO101-Staged-v0 \
       --num_envs 256 --device cuda:0 \
       --checkpoint logs/rsl_rl/pick_apple_staged_so101/<run>/model_XXXX.pt \
-      --external_callback scripts.eval_pick_home:install_episode_counter \
+      --external_callback scripts.eval_pick_home.install_episode_counter \
       --viz none
   # 输出找 PICK_APPLE_EVAL_RESULT= 一行（success_rate 即 home 出生完整任务的确定性成功率）
   # PICK_DEBUG_RELEASE=1 可选：play 时 1Hz 打印每环境 RELEASE 未满足项
 
 
 
+
+
+## 摄像头 PPO：已验证版本
+
+摄像头 PPO 保留以下两个入口：
+
+- `Pick-Apple-SO101-Staged-Camera-v8`：纯摄像头 PPO，actor 使用腕部 RGB 和本体感受，critic 使用特权状态。
+- `Pick-Apple-SO101-Staged-Camera-Filtered-v0`：同一模型加机械臂 EMA 平滑，夹爪保持原动作。
+
+使用的已验证 checkpoint：
+`logs/rsl_rl/pick_apple_staged_so101_camera/2026-10-07_00-53-39_cam_v12_ft_lowlr/model_13000.pt`。
+任务版本 v8 和实验目录 cam_v12 是不同编号。
+
+```bash
+conda activate isaaclab_61
+bash scripts/play_camera_smooth.sh
+```
+
+原始动作回放：
+
+```bash
+python scripts/play_pick.py --rl_library rsl_rl \
+  --task Pick-Apple-SO101-Staged-Camera-v8 \
+  --num_envs 1 --device cuda:0 --viz kit --real-time \
+  --checkpoint logs/rsl_rl/pick_apple_staged_so101_camera/2026-10-07_00-53-39_cam_v12_ft_lowlr/model_13000.pt
+```
+
+相同任务的 PPO 训练入口：
+
+```bash
+python scripts/train_pick.py --rl_library rsl_rl \
+  --task Pick-Apple-SO101-Staged-Camera-v8 \
+  --num_envs 512 --device cuda:0 --seed 42 --max_iterations 12000 --viz none \
+  --run_name camera_v8
+```
+
+该命令使用成功版本的任务和 PPO 配方；新训练仍需完整任务验收，不保证复现相同成功率。
+模型权重在 Git 忽略的 `logs/` 下，未上传到仓库。
+平滑回放和评估见 [CAMERA_PPO_SMOOTHING.md](scripts/CAMERA_PPO_SMOOTHING.md)。
+独立教师到摄像头蒸馏入口仍为 `Camera-Distill-v10`，见
+[CAMERA_DISTILL_V10.md](scripts/CAMERA_DISTILL_V10.md)。

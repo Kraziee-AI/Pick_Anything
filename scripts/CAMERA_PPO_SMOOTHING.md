@@ -25,32 +25,16 @@ bash scripts/play_camera_smooth.sh --device cuda:1
 
 2026-10-09 同口径 128 局验收：原模型成功 111/128，机械臂平滑后 114/128；应用动作变化平方和下降 61.6%，实际臂速度反向比例下降 54.1%。这次无需改权重即可减轻抖动。成功率差异不能视为已证明统计显著提升。完整结果见 `photos/camera_ppo_diagnosis/smoothing_results.md`；GUI 显示性能尚未实测。
 
-## 是否需要重训
+## 保留的任务
 
-直接加滤波不需要改模型权重，可加载原检查点运行，但必须验证任务成功率；评估数据放在 `photos/camera_ppo_diagnosis/`。
-如果要让策略自身学会更平滑的输出，应从该检查点继续纯视觉 PPO 微调，不必从零训练。
+- `Pick-Apple-SO101-Staged-Camera-v8`：已验证模型的原始动作执行方式。
+- `Pick-Apple-SO101-Staged-Camera-Filtered-v0`：已验证的机械臂 EMA 平滑回放。
 
-新增两个隔离任务：
-
-- `Pick-Apple-SO101-Staged-Camera-Smooth-v0`：与 Camera-v8 的动作执行相同，仅把最终 action_rate 权重提高到 -0.1，用于单独学习平滑输出。
-- `Pick-Apple-SO101-Staged-Camera-Filtered-v0`：同样的平滑奖励，加机械臂 EMA；训练、推理共同使用滤波，夹爪保持原执行方式。
-
-两者 actor/critic 结构和观测都兼容 model_13000；学习率 3e-5，固定课程，继承纯 PPO。默认加载模型和原迭代号，重建优化器，避免旧优化器覆盖新学习率。显式 load_cfg 可以用于恢复优化器；此配置默认设计为从原模型开启新的微调实验。
-
-可选续训命令（以下是训练方案，尚未代表已训练并验收的新权重）：
-
-```bash
-conda activate isaaclab_61
-python scripts/train_pick.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-Camera-Filtered-v0 \
-  --num_envs 256 --device cuda:0 --seed 42 --max_iterations 1000 \
-  --run_name cam_v12_arm_smooth \
-  --checkpoint logs/rsl_rl/pick_apple_staged_so101_camera/2026-10-07_00-53-39_cam_v12_ft_lowlr/model_13000.pt \
-  --viz none
-```
-
-输出在独立的 `logs/rsl_rl/pick_apple_staged_so101_camera_smooth/`。每 100 轮存档；默认沿用迭代号，所以续训 1000 轮的文件编号约为 13000–14000。
-实际选择应同时看完整任务成功率、应用动作变化平方和、实际关节速度反向率。-0.1 是初始实验值，不是已经验证的最优奖励权重。
+已移除仅用于奖励消融的 `Smooth` 入口以及其他历史摄像头 PPO 实验入口。
+Filtered 保留验收时的配置（包括 action_rate 权重 -0.1）；权重不影响
+已有模型的确定性推理。滤波部署不需要改模型权重。
+其独立 runner 的学习率为 3e-5，默认加载 actor/critic 和迭代号并重建优化器。
+这只是续训配置，尚未验收通过该奖励重新训练的新模型。
 
 ## 评估与回归检查
 
@@ -63,4 +47,4 @@ python scripts/eval_camera_smooth.py --rl_library rsl_rl \
 python scripts/test_camera_smoothing.py
 ```
 
-评估只计每个环境的第一个 HOME 完整任务，结束后退出；同时统计策略原始指令、滤波后实际应用指令和机械臂实际速度。原有 Camera-v8 和其他训练任务没有改动。
+评估只计每个环境的第一个 HOME 完整任务，结束后退出；同时统计策略原始指令、滤波后实际应用指令和机械臂实际速度。Camera-v8、Filtered 和蒸馏 v10 的环境及 runner 参数与清理前保持一致。

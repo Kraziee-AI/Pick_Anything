@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import torch
+import gymnasium as gym
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pick_anything.tasks.pick_apple.smooth_camera_cfg import (
@@ -16,6 +17,14 @@ from pick_anything.tasks.pick_apple.smooth_camera_cfg import (
 
 
 class SmoothingTests(unittest.TestCase):
+    def test_only_supported_camera_tasks_are_registered(self):
+        tasks = {name for name in gym.registry if name.startswith("Pick-Apple-SO101-Staged-Camera-")}
+        self.assertEqual(tasks, {
+            "Pick-Apple-SO101-Staged-Camera-v8",
+            "Pick-Apple-SO101-Staged-Camera-Filtered-v0",
+            "Pick-Apple-SO101-Staged-Camera-Distill-v10",
+        })
+
     def test_filter_and_resets(self):
         # Exercise actual process_actions/reset methods without constructing a simulator.
         action = FilteredRelativeJointPositionAction.__new__(FilteredRelativeJointPositionAction)

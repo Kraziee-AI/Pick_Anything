@@ -10,7 +10,7 @@ from isaaclab.utils import configclass
 from isaaclab_tasks.utils import PresetCfg
 
 from .camera_env_cfg import CameraClosureFinetuneEnvCfg
-from .agents.camera_ppo_cfg import CameraTutorialFixedLRPPOBaseRunnerCfg, CAMERA_ALGO_CFG
+from .agents.camera_ppo_cfg import CameraPPOBaseRunnerCfg, CAMERA_ALGO_CFG
 
 
 class FilteredRelativeJointPositionAction(RelativeJointPositionAction):
@@ -66,22 +66,13 @@ class SmoothCameraPPO(PPO):
 
 
 @configclass
-class CameraSmoothEnvCfg(CameraClosureFinetuneEnvCfg):
-    """Keep v8 control/observations; strengthen post-scaling action-rate reward."""
-
-    def __post_init__(self):
-        super().__post_init__()
-        # Final weight, AFTER the inherited x1/30 reward scaling.
-        # Starting ablation: 300x original; verify success together with roughness.
-        self.rewards.action_rate.weight = -0.1
-
-
-@configclass
-class CameraFilteredEnvCfg(CameraSmoothEnvCfg):
+class CameraFilteredEnvCfg(CameraClosureFinetuneEnvCfg):
     """Optional arm EMA shared by training and deployment; gripper unchanged."""
 
     def __post_init__(self):
         super().__post_init__()
+        # Preserve the configuration used for the successful filtered playback.
+        self.rewards.action_rate.weight = -0.1
         arm = self.actions.arm_action
         self.actions.arm_action = FilteredRelativeJointPositionActionCfg(
             asset_name=arm.asset_name, joint_names=arm.joint_names,
@@ -91,7 +82,7 @@ class CameraFilteredEnvCfg(CameraSmoothEnvCfg):
 
 
 @configclass
-class CameraSmoothPPOBaseRunnerCfg(CameraTutorialFixedLRPPOBaseRunnerCfg):
+class CameraSmoothPPOBaseRunnerCfg(CameraPPOBaseRunnerCfg):
     max_iterations = 1000
     save_interval = 100
     experiment_name = "pick_apple_staged_so101_camera_smooth"

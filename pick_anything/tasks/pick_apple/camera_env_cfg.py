@@ -1,16 +1,8 @@
-"""腕部相机版八阶段任务的环境配置（gym id: Pick-Apple-SO101-Staged-Camera-v0）。
+"""Shared camera primitives and the validated Camera-v8 PPO environment.
 
-与 ``StagedPickAppleEnvCfg``（Pick-Apple-SO101-Staged-v0）的唯一区别是
-actor 的输入：腕部相机 RGB + 本体感受替换「相对目标特征 + 里程碑」。
-八阶段状态机、reset 课程（StagedReset + bank）、奖励表、终止条件、
-Newton 物理全部原样继承——阶段推进是环境侧逻辑，不依赖 actor 观测。
-critic 保留全部特权观测（非对称 AC，结构对齐 IsaacLabTutorial 的
-``SO101VialCameraEnvCfg``）。
-
-相机 prim 是 SO101 USD 自带的 ``gripper/wowrobo_2MP_camera``（实机同款
-2MP 腕摄）；spawn 时把 clippingRange 压到 (0.001, 5.0)——默认近裁剪面
-会把爪下的橘子裁出画面（教程实测必改项）。64×48 分辨率 / 30Hz 更新
-（控制 30Hz，每步一张新图），与教程视觉任务完全同参。
+Camera-v8 uses 128×96 wrist RGB and 24-D proprioception for its actor,
+privileged state for its critic, fine relative joint actions, fixed reset
+curriculum and scaled rewards. Distillation v10 reuses the camera primitives.
 """
 
 from __future__ import annotations
@@ -33,7 +25,6 @@ from pick_anything.robots import SO101_FOLLOWER_CFG
 from pick_anything.tasks.pick_apple import camera_mdp, staged_mdp
 from pick_anything.tasks.pick_apple.pick_env_cfg import PickRLSceneCfg
 from pick_anything.tasks.pick_apple.staged_env_cfg import (
-    PhysicsDREventsCfg,
     StagedObservationsCfg,
     StagedPickAppleEnvCfg,
     StagedRewardsCfg,
@@ -172,31 +163,6 @@ class CameraStagedSceneCfg(PickRLSceneCfg):
         data_types=["rgb"],
         width=64,
         height=48,
-        update_period=1.0 / 30.0,
-        update_latest_camera_pose=True,
-        renderer_cfg=MultiBackendRendererCfg(),
-    )
-
-
-@configclass
-class CameraStagedHdSceneCfg(CameraStagedSceneCfg):
-    """v3 蒸馏专用：腕摄 128×96（HD）。
-
-    2026-10-02 distill_v2 失败的逐项教程对照结论（详见
-    CameraDistillV3PickAppleEnvCfg docstring）：教程 place_vial 的 vial
-    躺平 ~10cm 长（视觉签名几十像素）且 HOME 出生仅 5×8cm 小框、20s 短
-    局；我们的橘子 45mm 球在 22cm 外只有 ~8 像素、出生散布 22×3.8cm、
-    90s 长局——同款 64×48 下学生看不清，长链模仿误差无法闭环修正。
-    分辨率 ×2 是「物体更小更远更散」的按比例补偿，其余与教程逐字一致
-    （单变量归因）。CNN/MLP 维度由 rsl_rl 按输入自适应，无需改网络配置。
-    """
-
-    wrist_camera: CameraCfg = CameraCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/gripper/wowrobo_2MP_camera",
-        spawn=None,
-        data_types=["rgb"],
-        width=128,
-        height=96,
         update_period=1.0 / 30.0,
         update_latest_camera_pose=True,
         renderer_cfg=MultiBackendRendererCfg(),
@@ -372,7 +338,7 @@ HOME_BOX_WINDOW = (0.440, 0.490, -0.450, -0.400)
 
 
 def scan_home_robot_cfg():
-    """返回换 P7 扫视 HOME 姿态的相机机器人 cfg 副本（不改共享实例）。"""
+    """返回换 O 扫视 HOME 姿态的相机机器人 cfg 副本（不改共享实例）。"""
     return CAMERA_SO101_CFG.replace(
         init_state=CAMERA_SO101_CFG.init_state.replace(joint_pos=dict(SCAN_HOME_ARM_JOINTS))
     )
@@ -393,43 +359,6 @@ class CameraProprioceptionV2Cfg(CameraProprioceptionCfg):
         func=staged_mdp.safe_joint_target,
         noise=UniformNoiseCfg(n_min=-0.005, n_max=0.005),
     )
-
-
-@configclass
-class CameraVisibleHomeEnvCfg(CameraStagedPickAppleEnvCfg):
-    """v1：HOME 出生橘子刷进腕摄可见窗口（gym id: Pick-Apple-SO101-Staged-Camera-v1）。
-
-    仅比 v0 多一个 reset 参数（home_orange_window，StagedReset 侧消费），
-    HOME→PREGRASP 从盲搜变成可学的视觉伺服；late 课程 home 0.30 权重不动
-    （home 出生的采样预算现在有产出）。v0 类零改动——蒸馏线继承 v0，出生
-    分布与其教师（状态线）训练分布保持一致。play/评估的 home-only 口径
-    自动带窗口，与实机部署条件一致（开工前目标入镜）。窗口变宽的后续
-    手段是「高位扫视姿态」（reset_arm_joints 偏置），见训练复盘。
-
-    cam_v4 教程口径移植（2026-09-29 对照 IsaacLabTutorial place_vial，同款
-    SO101+腕摄视觉 PPO 确定性审计 99% 的差异定位）：
-    * **动作粒度**：臂 0.15→0.033、夹爪 0.35→0.02 rad/步。原口径夹爪 5 步
-      全闭≈开关、臂步长是教程 4.5×——视觉闭环每步位移噪声放大 5~17×，
-      这是 PREGRASP→GRASP ~9% 断层（合爪需毫米级）且一夜超参修不动的主因；
-      教程注释「std 上界须保 approach 可学」的前提正是小 scale（0.3×0.02）。
-    * **第 4 项本体 joint_target**（CameraProprioceptionV2Cfg）。
-    * episode 60s→90s：动作慢 4.5×，防慢策略被预算封顶。
-    三项均只挂 v1；v0（蒸馏）与状态线零影响。actor 输入维度变化（18→24）
-    ——cam_v4 起从头训练，不加载 cam_v3 checkpoint。
-    """
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.events.reset_staged.params["home_orange_window"] = HOME_ORANGE_WINDOW
-        self.observations.proprioception = CameraProprioceptionV2Cfg()
-        self.actions.arm_action.scale = 0.033
-        self.actions.gripper_action.scale = 0.02
-        self.episode_length_s = 90.0
-
-
-# --------------------------------------------------------------------- #
-# v2：前段教程式势能差塑形（cam_v5）
-# --------------------------------------------------------------------- #
 
 
 @configclass
@@ -463,180 +392,32 @@ class CameraFrontRewardsCfg(StagedRewardsCfg):
 CAMERA_CURRICULUM_LATE_V2 = (0.40, 0.18, 0.16, 0.10, 0.04, 0.04, 0.04, 0.04)
 
 
+CAMERA_REWARD_SCALE = 1.0 / 30.0
+
+
 @configclass
-class CameraFrontShapedEnvCfg(CameraVisibleHomeEnvCfg):
-    """v2：前段教程式势能差塑形 + home 加权课程（gym id: Pick-Apple-SO101-Staged-Camera-v2）。
+class CameraClosureFinetuneEnvCfg(CameraStagedPickAppleEnvCfg):
+    """Validated Camera-v8: closure camera, fine actions and fixed reset curriculum."""
 
-    在 v1（可见窗口 + 教程动作粒度 + joint_target 本体）基础上只改两项：
-    奖励表换 CameraFrontRewardsCfg、late 课程换 CAMERA_CURRICULUM_LATE_V2。
-    观测/动作/物理/状态机/bank 全部继承，v0/v1 与蒸馏线零影响。
-    """
-
+    scene: CameraClosureHdSceneCfg = CameraClosureHdSceneCfg(num_envs=1024)
     rewards: CameraFrontRewardsCfg = CameraFrontRewardsCfg()
 
     def __post_init__(self):
         super().__post_init__()
-        self.events.reset_staged.params["curriculum_late"] = CAMERA_CURRICULUM_LATE_V2
-
-
-# --------------------------------------------------------------------- #
-# v3：奖励全表缩放到教程量级（cam_v6；PPO 配套见 camera_ppo_cfg 的
-# CameraTutorialPPORunnerCfg）
-# --------------------------------------------------------------------- #
-
-CAMERA_REWARD_SCALE = 1.0 / 30.0
-"""v3 全表奖励缩放：我们每局回报 ~200-250 → 教程 ~7（比例不变仅缩尺度）。"""
-
-
-@configclass
-class CameraTutorialEnvCfg(CameraFrontShapedEnvCfg):
-    """v3：v2 语义 + 全表奖励 ×CAMERA_REWARD_SCALE（gym id: Pick-Apple-SO101-Staged-Camera-v3）。
-
-    cam_v5 复盘（2026-10-01，17002 迭代：峰值 87.6%@15125 后回落 81%）。
-    与 IsaacLabTutorial vision run（2026-09-24_00-13-08）逐项对照后排除了
-    两个"嫌疑"——它们在教程日志里同样存在，不是病根：
-    * **std 钉死 0.3 上界**：教程全程同样钉死（entropy 1.28979 = 6 维 σ0.3
-      理论值 1.2896），照样 5000 迭代 93% 随机 / 99% 确定性；
-    * **固定 LR 1e-4**：教程 adaptive 实际运行区间 3e-5~1.7e-4（均值 ≈1e-4），
-      与我们固定值等效。
-    真正的断层在 value 函数拟合：**Loss/value 教程全程 ≈0.1，我们 500→1000
-    且随训练增长**——每局回报 ~200-250（stage bonus 合计 83 + 终局 20 +
-    稠密项累积）vs 教程 ~7，价值目标尺度大 30 倍，critic 拟合不动 →
-    advantage 噪声大 → 策略在 87% 附近震荡回落（教程曲线单调到 93%）。
-
-    修法：v2 任务语义全保留（窗口/细动作/90s/课程/奖励结构比例），全表
-    奖励统一 ×1/30 对齐教程量级；优化器同步回教程配方（entropy 0.005
-    只有在缩放后才回到教程的 entropy:reward 相对压力）。缩放在
-    __post_init__ 里对 dataclass fields 遍历进行——新增奖励项自动覆盖，
-    weight=0 的对账项保持 0。
-    """
-
-    def __post_init__(self):
-        super().__post_init__()
+        self.scene.robot = scan_home_closure_robot_cfg()
+        self.observations.proprioception = CameraProprioceptionV2Cfg()
+        self.actions.arm_action.scale = 0.033
+        self.actions.gripper_action.scale = 0.02
+        self.episode_length_s = 90.0
+        self.events.reset_staged.params["home_orange_window"] = SCAN_ORANGE_WINDOW
+        self.events.reset_staged.params["home_box_window"] = HOME_BOX_WINDOW
+        self.events.reset_arm_joints.params["position_range"] = [-0.05, 0.05]
+        for phase in ("early", "mid", "late"):
+            self.events.reset_staged.params[f"curriculum_{phase}"] = tuple(staged_mdp.CURRICULUM_LATE)
         for field_info in fields(self.rewards):
             term = getattr(self.rewards, field_info.name, None)
             if term is not None and hasattr(term, "weight"):
                 term.weight = round(term.weight * CAMERA_REWARD_SCALE, 6)
-
-
-# --------------------------------------------------------------------- #
-# v5：HOME 出生几何升级——高位扫视 O 姿态 + 盒子可见窗口（与蒸馏 v4 / 教师
-# v5 完全同款几何；PPO 配套沿用 v4 的 CameraTutorialFixedLRPPORunnerCfg）
-# --------------------------------------------------------------------- #
-
-
-@configclass
-class CameraScanHomeEnvCfg(CameraTutorialEnvCfg):
-    """v5：v3 环境 + HOME 出生几何升级（gym id: Pick-Apple-SO101-Staged-Camera-v5）。
-
-    2026-10-02 用户看出生画面定方向（「离桌子太近、视野小」，橘子+盒子要
-    同框），蒸馏 v4 / 教师线已换 O 姿态（workshop roll=-0.804 族，相机
-    23cm 高/倾 26°，probe_camera_geometry 网格实测选型，photos/
-    cam_geometry/）+ SCAN_ORANGE_WINDOW/HOME_BOX_WINDOW 双窗口；同日实测
-    旧教师 model_4250 在新几何下确定性 246/256=96.1%——新几何任务可解。
-    相机直训线同步该几何，与蒸馏 v4 学生**同出生分布**，两条线可直接对照。
-
-    单变量原则：相对 Camera-v4（cam_v6b 配方）只改 HOME 出生几何三件套
-    （姿态/双窗口/关节噪声 ±0.1→±0.05），64×48 分辨率、奖励缩放、课程、
-    90s episode 全部不动——128×96 是蒸馏线的独立变量，不混入本实验。
-    新 gym id 不动 CameraTutorialEnvCfg：cam_v6b 在跑，v3/v4 注册保可复现。
-    """
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.scene.robot = scan_home_robot_cfg()
-        self.events.reset_staged.params["home_orange_window"] = SCAN_ORANGE_WINDOW
-        self.events.reset_staged.params["home_box_window"] = HOME_BOX_WINDOW
-        # 与蒸馏 v4 同款降噪：±0.1 的 pan 抖动=视野横移 ±3cm，会把贴缘盒子
-        # 摇出去一半出生（官方出生=固定舞台无关节噪声）
-        self.events.reset_arm_joints.params["position_range"] = [-0.05, 0.05]
-
-
-@configclass
-class CameraScanHomeShortEnvCfg(CameraScanHomeEnvCfg):
-    """v6：v5 + episode 90s→20s（gym id: Pick-Apple-SO101-Staged-Camera-v6）。
-
-    2026-10-02 distill_v4 中途复盘 + 教程日志实测（三条线全部 20s、收敛局
-    128-155 步、time_out 仅 3.8-6%），而我们的细粒度教师完成任务均值 121
-    步——失败局在 90s/2700 步帽下游荡是采样预算黑洞。单变量 = episode
-    长度；64×48 分辨率、奖励缩放、PPO 配方全部继承 v5。课程三档表不动：
-    reset 快 ~4.5× → 更早进入 home 加权 late 档（符合意图）。阶段机/确认
-    步数全是控制步、与局长无关。后手：time_out >0.75 且 success 被压 → 30s。
-    与蒸馏 v5 同日同变量启动，两条线可对照（学生同出生分布）。
-    """
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.episode_length_s = 20.0
-
-
-@configclass
-class CameraClosureScanHomeEnvCfg(CameraScanHomeEnvCfg):
-    """v7：v5 + 合爪盲区修复相机（gym id: Pick-Apple-SO101-Staged-Camera-v7）。
-
-    单变量主线 = 相机（俯角 -12° + FOV ×1.5，见 CameraClosureHdSceneCfg
-    docstring 的根因与验证数据）；配套两处连带：
-
-    * 分辨率 64×48→128×96：FOV 放大使 HOME 橘子只剩 ~6px 直径，必须补像素
-      （蒸馏线 v3 起已是 128×96，两线从此同口径，可互相对照）；
-    * episode 回 90s（v6 的 20s 实测勒死学习者：time_out 72→88%、连 LIFT
-      出生都 0——学习者每局需要 >600 步，600 步帽下成功奖励发不出来，
-      PPO 失去完成信号梯度）。
-
-    其余（O 姿态 HOME 几何、双窗口、噪声 ±0.05、缩放奖励、固定 LR、课程）
-    全部继承 v5。相机直训线与蒸馏 v6 学生同出生分布+同相机，直接对照。
-    """
-
-    scene: CameraClosureHdSceneCfg = CameraClosureHdSceneCfg(num_envs=1024)
-
-    def __post_init__(self):
-        super().__post_init__()
-        # super 链（ScanHome.__post_init__）会把 robot 换成旧相机的
-        # scan_home_robot_cfg()——必须在 super 之后换成 closure 相机版
-        self.scene.robot = scan_home_closure_robot_cfg()
-
-
-@configclass
-class CameraClosureFinetuneEnvCfg(CameraClosureScanHomeEnvCfg):
-    """v8：v7 + 课程三档钉死为固定表（gym id: Pick-Apple-SO101-Staged-Camera-v8）。
-
-    2026-10-04 cam_v9_cont 复盘定因：--checkpoint 续训时课程 reset_count 归零、
-    从 early 重爬,叠加梯度被 HOME 链占据,bank 的 LIFT/STABILIZE「悬空冷恢复」
-    出生态发生遗忘性退化（LIFT-born 51%→22%、STABILIZE 43%→7%）;HOME 则在
-    σ0.09 下随机口径平台 0.75（确定性 91%）。**IsaacLabTutorial 全程固定任务
-    分布（无课程,每局完整任务）**——续训/精修的正确口径是固定出生分布。
-
-    修复：三档课程全部钉死为 staged 默认 LATE 表（home 0.50,其余阶段保底
-    非零防遗忘）——从 checkpoint 续训时无 early 瞬态、bank 中段占比恒定。
-    其余（闭包相机/O 姿态/双窗口/90s/奖励/固定 LR/init_at_random_ep_len
-    =框架默认 True）全部继承 v7。用于从强 checkpoint 起的精修段。
-    """
-
-    def __post_init__(self):
-        super().__post_init__()
-        fixed = tuple(staged_mdp.CURRICULUM_LATE)
-        self.events.reset_staged.params["curriculum_early"] = fixed
-        self.events.reset_staged.params["curriculum_mid"] = fixed
-        self.events.reset_staged.params["curriculum_late"] = fixed
-
-
-@configclass
-class CameraFineTuneHdEnvCfg(CameraClosureFinetuneEnvCfg):
-    """相机 v9：v8 + 腕摄 256×192——蒸馏学生 PPO 收尾口径（gym id: Pick-Apple-SO101-Staged-Camera-v9）。
-
-    2026-10-07 路线 A（用户批准，见 agents/hybrid_ppo.py）：拿 v9 蒸馏学生
-    （distill_v9_hd256/model_500）做 PPO 初始化继续训练——**CNN 输入必须是
-    256×192**（与该学生的训练分辨率一致，分辨率不匹配=strict load 直接报错）。
-    与 distill v9 相同的覆写方式（scene.wrist_camera.width/height 在
-    __post_init__ 末尾覆盖，已验证生效）。其余全部继承 v8（闭包相机/O 姿态/
-    双窗口/固定 home-0.50 课程/90s/0.033/0.02/奖励 ×1/30）——cam_v12 已实证
-    该环境语义 + 低 LR + 守护收割 = 92.19%。
-    """
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.scene.wrist_camera.width = 256
-        self.scene.wrist_camera.height = 192
 
 
 # --------------------------------------------------------------------- #
@@ -737,16 +518,3 @@ class StagedSmoothTeacherEnvCfg(StagedFineTeacherEnvCfg):
         # super 链末尾已把全表 ×CAMERA_REWARD_SCALE（action_rate 变 -0.000333）；
         # 在其后直接覆盖为有效值 -4.0（定标见类 docstring）
         self.rewards.action_rate.weight = -4.0
-
-
-@configclass
-class CameraClosureDRFinetuneEnvCfg(CameraClosureFinetuneEnvCfg):
-    """v10：v8 + 执行器带逐局随机（gym id: Pick-Apple-SO101-Staged-Camera-v10）。
-
-    相机线 Plan B 落点：在 cam_v12 冠军口径（v8 固定课程 LATE）上唯一加
-    PhysicsDREventsCfg（执行器带逐局随机）。训练配方照抄 cam_v12 夜巡：
-    从强 checkpoint 续训 + LR 3e-5 注入 + 512 envs + 每 1000 iter 确定性
-    guard-eval（两连 <0.848 即停，留最优）。v8 注册不动可复现。
-    """
-
-    events: PhysicsDREventsCfg = PhysicsDREventsCfg()
