@@ -33,6 +33,7 @@ from pick_anything.robots import SO101_FOLLOWER_CFG
 from pick_anything.tasks.pick_apple import camera_mdp, staged_mdp
 from pick_anything.tasks.pick_apple.pick_env_cfg import PickRLSceneCfg
 from pick_anything.tasks.pick_apple.staged_env_cfg import (
+    PhysicsDREventsCfg,
     StagedObservationsCfg,
     StagedPickAppleEnvCfg,
     StagedRewardsCfg,
@@ -736,3 +737,16 @@ class StagedSmoothTeacherEnvCfg(StagedFineTeacherEnvCfg):
         # super 链末尾已把全表 ×CAMERA_REWARD_SCALE（action_rate 变 -0.000333）；
         # 在其后直接覆盖为有效值 -4.0（定标见类 docstring）
         self.rewards.action_rate.weight = -4.0
+
+
+@configclass
+class CameraClosureDRFinetuneEnvCfg(CameraClosureFinetuneEnvCfg):
+    """v10：v8 + 执行器带逐局随机（gym id: Pick-Apple-SO101-Staged-Camera-v10）。
+
+    相机线 Plan B 落点：在 cam_v12 冠军口径（v8 固定课程 LATE）上唯一加
+    PhysicsDREventsCfg（执行器带逐局随机）。训练配方照抄 cam_v12 夜巡：
+    从强 checkpoint 续训 + LR 3e-5 注入 + 512 envs + 每 1000 iter 确定性
+    guard-eval（两连 <0.848 即停，留最优）。v8 注册不动可复现。
+    """
+
+    events: PhysicsDREventsCfg = PhysicsDREventsCfg()

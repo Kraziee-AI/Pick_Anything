@@ -188,3 +188,17 @@ gym.register(
         "default_agent": "rsl_rl",
     },
 )
+
+# 相机 v10（Plan B 物理域随机化）：v8 唯一变量 = events 换 PhysicsDREventsCfg
+# （执行器带逐局随机）。训练配方照抄 cam_v12 夜巡：强 checkpoint 续训 +
+# LR 3e-5 注入 + 512 envs + guard-eval。v8 注册不动可复现
+gym.register(
+    id="Pick-Apple-SO101-Staged-Camera-v10",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.camera_env_cfg:CameraClosureDRFinetuneEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.camera_ppo_cfg:CameraTutorialFixedLRPPORunnerCfg",
+        "default_agent": "rsl_rl",
+    },
+)

@@ -290,6 +290,47 @@ class StagedEventsCfg:
 
 
 @configclass
+class PhysicsDREventsCfg(StagedEventsCfg):
+    """Plan B 物理域随机化（TeacherFine-v2 / Camera-v10 共用）：执行器带逐局随机。
+
+    参照 vs 现状 vs 差异理由（2026-10-08 sim2sim 混沌墙定案后立项，见
+    mujoco_sim2sim/README.md「门窗口诊断轮」）：
+    - 参照：IsaacLab lift_env_cfg.EventCfg 执行器增益 scale [0.5,2.0]；
+      现状（StagedEventsCfg）gains/friction 仅 startup 期随机——每进程一采、
+      所有局共享同一物理，等于没有执行器 DR。
+    - 差异 1（startup→reset）：teacher_smooth_v1 对 Isaac 物理常数过拟合
+      （爪峰过门余量仅 +0.0041 rad），换求解器即混沌分岔；逐局随机才能训出
+      容忍带。真机迁移同理（真机动力学与仿真亦差 2-5%）。
+    - 差异 2（区间加宽）：gains [0.9,1.1]→[0.75,1.25]（下界覆盖实测跨求解器
+      kd 偏差 ×0.73~0.75）；friction [0.01,0.05]→[0.005,0.08]（abs）。首版
+      保守（官方 lift 用 ±100%），razor-thin 任务先保成功率再逐步加宽。
+    - 不动：材料/质量 DR 仍 startup（Newton 接触回调 MODEL_INIT 固定 ke/kd/mu
+      与材料 DR 的覆盖顺序未验证，单变量纪律）；不加 push/armature（对
+      锁存时序是二阶效应，第二版再议）。
+    """
+
+    joint_gains = EventTerm(
+        func=randomize_actuator_gains,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*"]),
+            "stiffness_distribution_params": [0.75, 1.25],
+            "damping_distribution_params": [0.75, 1.25],
+            "operation": "scale",
+        },
+    )
+    joint_friction = EventTerm(
+        func=randomize_joint_parameters,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*"]),
+            "friction_distribution_params": [0.005, 0.08],
+            "operation": "abs",
+        },
+    )
+
+
+@configclass
 class StagedRewardsCfg:
     """八阶段奖励表（weight × dt = 有效值；一次性项按 bonus 计）。
 
