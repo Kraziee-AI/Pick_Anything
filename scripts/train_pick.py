@@ -15,10 +15,6 @@ Run from the Pick_Anything root so logs land in ./logs:
     python scripts/train_pick.py --rl_library rsl_rl --task Pick-Apple-SO101-Staged-v0 \\
         --num_envs 32 --max_iterations 5 --viz none
 
-旧版三级任务（v0，保留作对照）：
-
-    python scripts/train_pick.py --rl_library rsl_rl --task Pick-Apple-SO101-v0 \\
-        --num_envs 4096 --device cuda:0 --seed 42 --max_iterations 15000 --viz none
 """
 
 import sys
@@ -27,7 +23,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import pick_anything.tasks  # noqa: F401,E402  -- importing registers Pick-Apple-SO101-v0
+import pick_anything.tasks  # noqa: F401,E402  -- importing registers the supported tasks
 
 from isaaclab_rl.entrypoints.dispatch import run_train_cli  # noqa: E402
 

@@ -53,31 +53,16 @@ python scripts/convert_graspnet_object.py --object <编号> --name <名字> --ma
 编号对应 GraspNet 88 物体（012=苹果、016=橘子、015=梨、013=柠檬…），
 产物在 `assets/objects/<名字>/`（自包含 USD + 贴图）。
 
-## 强化学习：抓苹果入纸盒（Pick-Apple-SO101-v0）
+## 坐标 PPO：八阶段抓橘子入纸盒
 
-manager-based RL 环境，场景资产与 demo 完全共用。任务状态机（`pick_anything/tasks/pick_apple/mdp.py`
-的 `PickState`，每控制步刷新一次）：接近苹果 → 夹持举起（苹果离桌 + 夹爪贴近 + 净接触力）→
-运送到纸盒上方悬停 → 松手落入盒内（盒局部系内、静止、夹爪撤离）判定成功。
+唯一坐标训练入口：`Pick-Apple-SO101-Staged-v0`。
+actor 读取橘子和盒子的相对坐标、本体状态及三帧历史，critic 额外读取特权状态。
+任务依次经过 HOME、PREGRASP、GRASP、LIFT、STABILIZE、TRANSPORT、PLACE、RELEASE；
+使用物理验证的 reset bank 和课程学习，部署与评估从 HOME 执行完整任务。
 
-奖励（进度制：每米进展只付一次，防刷分）：
-
-| 项 | 权重 | 说明 |
-|----|------|------|
-| approach | +12/m | 夹爪→苹果 的距离进展（苹果在桌时） |
-| height | +25/m | 举起高度进展（越过 5cm 盒壁） |
-| hover | +20/m | 苹果→盒心上方悬停点的距离进展 |
-| grasp | +4 | 首次夹起苹果的一次性奖励 |
-| place | +30 | 苹果松手落盒并静止（终止） |
-| box_disturbed | -1.5/步 | 抓到苹果前纸盒被挪动 >1.2cm |
-| box_disturbed_late | -0.5/步 | 抓取后仍大力挪动纸盒 |
-| orange_disturbed | -1.0/步 | 橘子被挪动（任何时候，对应"碰到别的东西不好"） |
-| action_rate | -0.005 | 平滑正则 |
-| apple_dropped / box_ruined / abnormal | -8 / -5 / -15 | 苹果掉离桌面 / 纸盒翻倒 / 关节速度爆表（终止罚） |
-
-终止：成功入盒、苹果离桌、纸盒翻倒/飞出、关节速度 >25 rad/s、超时 12s。
-课程：reset 事件按成功率 EMA 扩大刷位范围（难度 0.2→1.0）。
-
-
+成功模型示例：
+`logs/rsl_rl/pick_apple_staged_so101/2026-09-26_16-19-15_retreat_shaping_v2/model_12999.pt`。
+训练、回放和确定性评估命令见下文。早期三级任务及专属 PPO 配置已移除。
 
 ## 结构
 
@@ -87,14 +72,15 @@ pick_anything/
 ├── robots.py     # SO101_FOLLOWER_CFG（关节名、执行器参数来自 leisaac；自碰撞关闭）
 ├── env_cfg.py    # PickSceneCfg：场景 USD 引用 + 机械臂 + 水果/纸盒 + 灯光
 └── tasks/pick_apple/
-    ├── mdp.py            # PickState 状态机 + 自定义奖励/终止/事件/观测
-    ├── pick_env_cfg.py   # ManagerBasedRLEnvCfg（动作/观测/事件/奖励/终止）
-    └── agents/rsl_rl_ppo_cfg.py  # PPO 超参（沿用 Isaac-Lift-SO101 验证配方）
+    ├── mdp.py            # 共享几何、刷位和状态工具
+    ├── pick_env_cfg.py   # 共享场景与仿真基础配置
+    ├── staged_env_cfg.py # 八阶段动作、观测、奖励、reset 与终止
+    ├── staged_mdp.py     # 八阶段物理状态和奖励实现
+    └── agents/staged_ppo_cfg.py # 坐标 PPO 超参
 scripts/
 ├── demo_pick_scene.py
 ├── train_pick.py              # 训练入口（注册任务 + isaaclab train CLI）
 ├── play_pick.py               # 策略回放入口
-├── probe_pick_env.py          # 环境逻辑探针
 ├── convert_graspnet_object.py # GraspNet OBJ → 刚体 USD
 └── make_cardboard_box.py      # 生成无顶纸盒 USD
 ```

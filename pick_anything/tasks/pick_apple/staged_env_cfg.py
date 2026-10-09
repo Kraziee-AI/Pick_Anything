@@ -1,6 +1,6 @@
 """八阶段抓橘子入盒任务的环境配置（gym id: Pick-Apple-SO101-Staged-v0，历史名保留）。
 
-与 v0（PickAppleEnvCfg）的区别：
+八阶段坐标 PPO 任务：
 * 观测非对称：actor 只看相对量 + 物理里程碑；critic 额外看接触力/阶段
   one-hot 等特权信息（obs_groups={"actor": ["policy"], "critic": ["critic"]}）；
 * reset 事件换成 ``StagedReset``：按课程从物理验证 reset 状态库采样出生
@@ -42,7 +42,7 @@ from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg, NewtonCollisionP
 
 from pick_anything.tasks.pick_apple import mdp as v0
 from pick_anything.tasks.pick_apple import staged_mdp
-from pick_anything.tasks.pick_apple.pick_env_cfg import ARM_JOINT_NAMES, PickAppleEnvCfg
+from pick_anything.tasks.pick_apple.pick_env_cfg import ARM_JOINT_NAMES, PickTaskBaseEnvCfg
 
 
 def make_newton_physics() -> NewtonCfg:
@@ -412,8 +412,8 @@ class StagedTerminationsCfg:
 
 
 @configclass
-class StagedPickAppleEnvCfg(PickAppleEnvCfg):
-    """八阶段版任务配置（继承 v0 的场景/DR/sim 参数）。"""
+class StagedPickAppleEnvCfg(PickTaskBaseEnvCfg):
+    """八阶段版任务配置（共享场景和仿真基础参数）。"""
 
     actions: StagedActionsCfg = StagedActionsCfg()
     observations: StagedObservationsCfg = StagedObservationsCfg()

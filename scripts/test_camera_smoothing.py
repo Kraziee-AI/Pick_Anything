@@ -18,6 +18,8 @@ from pick_anything.tasks.pick_apple.smooth_camera_cfg import (
 
 class SmoothingTests(unittest.TestCase):
     def test_only_supported_camera_tasks_are_registered(self):
+        self.assertIn("Pick-Apple-SO101-Staged-v0", gym.registry)
+        self.assertNotIn("Pick-Apple-SO101-v0", gym.registry)
         tasks = {name for name in gym.registry if name.startswith("Pick-Apple-SO101-Staged-Camera-")}
         self.assertEqual(tasks, {
             "Pick-Apple-SO101-Staged-Camera-v8",

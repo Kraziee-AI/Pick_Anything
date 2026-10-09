@@ -1,7 +1,7 @@
 """RL task definitions for Pick_Anything.
 
-Importing this package registers all gym environments (currently the
-apple-picking-into-box task ``Pick-Apple-SO101-v0``).
+Importing this package registers the eight-stage coordinate PPO task,
+validated camera PPO tasks and camera distillation v10.
 """
 
 from . import pick_apple  # noqa: F401  -- importing registers the gym task
