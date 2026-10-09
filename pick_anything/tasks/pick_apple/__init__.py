@@ -2,6 +2,22 @@
 
 import gymnasium as gym
 
+# Isolated pure-PPO smoothing tasks; historical Camera-v8 remains reproducible.
+for _task_suffix, _env_class in (
+    ("Smooth", "CameraSmoothEnvCfg"),
+    ("Filtered", "CameraFilteredEnvCfg"),
+):
+    gym.register(
+        id=f"Pick-Apple-SO101-Staged-Camera-{_task_suffix}-v0",
+        entry_point="isaaclab.envs:ManagerBasedRLEnv",
+        disable_env_checker=True,
+        kwargs={
+            "env_cfg_entry_point": f"{__name__}.smooth_camera_cfg:{_env_class}",
+            "rsl_rl_cfg_entry_point": f"{__name__}.smooth_camera_cfg:CameraSmoothPPORunnerCfg",
+            "default_agent": "rsl_rl",
+        },
+    )
+
 from . import agents
 from .pick_env_cfg import PickAppleEnvCfg
 
