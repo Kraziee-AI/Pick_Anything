@@ -1,0 +1,92 @@
+<?xml version="1.0" ?>
+<!-- Pick_Anything sim2sim 主场景：SO101 + 桌 + 橘子 + 无顶纸盒 + 腕摄相机。
+
+对齐 Isaac 训练侧（staged_env_cfg.py / pick_env_cfg.py / env_cfg.py）：
+* <option>：integrator/cone/impratio 逐字对应 MJWarpSolverCfg（staged_env_cfg.py:48-70）
+  timestep=1/240：Isaac sim.dt=1/120 且 MJWarp num_substeps=2 → 物理步 1/240；
+  控制步 30Hz = 8 个物理步（Isaac decimation=4 × 2 子步）。
+* 全 geom 接触参数 = Isaac MODEL_INIT 回调写到所有 shape 的值
+  （staged_env_cfg.py:77-121）：friction 三元组 (滑0.9 扭0.1 滚0.5)
+  ——滚动摩擦 0.5 是夹住球的关键；solimp/solref 原值。
+* 桌：box(1.0,0.45,0.08) @ (0.355,-0.452,0.001)，桌面 z=0.041
+  （env_cfg.py:27, pick_env_cfg.py:121-126）。
+* 橘子：GraspNet 016 网格 scale 0.775（直径≈56.2mm），质量 0.023kg，
+  阻尼 (linear 0.3, angular 4.0)（pick_env_cfg.py:110-114）。
+  碰撞用同网格的 MuJoCo 凸包 = Isaac 的 ConvexHull 近似。
+* 纸盒：16×16×5cm 壁厚 3mm 无顶、origin 底面中心、质量 0.15kg
+  （make_cardboard_box.py:24-46；startup DR 的 0.14-0.16 取中值）。
+* contype/conaffinity 方案：机器人自碰 OFF（Isaac 关节链默认无自碰），
+  机器人-道具/道具-道具/道具-桌 全 ON：
+  robot collision=contype1/conaff2，桌与道具=contype2/conaff3。
+
+已知简化（对拍阶段再校）：overview 相机/灯光为查看方便非对齐项；
+腕摄相机光学位姿由 calib_camera.py FK 校准定版；相机视觉模块（机身+
+支架）由 build_calibrated_robot.mount_camera_visual 维护在镜头后方。
+-->
+<mujoco model="pick_anything_sim2sim">
+  <include file="so101_new_calib.xml"/>
+  <compiler angle="radian" meshdir="meshes" texturedir="meshes" autolimits="true"/>
+  <option timestep="0.00416666666" integrator="implicitfast" cone="elliptic" impratio="10"/>
+  <visual>
+    <!-- 2026-10-07 光度标定：对齐 Isaac cam_v12 真实观测直方图（photos/
+         rollout_probe/isaac_t000.png：整体均值≈(129,122,116)、桌面≈
+         (154,144,134)）。旧值（headlight 0.25/0.55 + 0.85 主光）整体过曝
+         1.55× 且桌面 255 削顶，远超训练光度 DR（exposure 0.75-1.25）。 -->
+    <headlight ambient="0.50 0.50 0.50" diffuse="0.06 0.06 0.06" specular="0 0 0"/>
+    <global offwidth="640" offheight="480"/>
+    <!-- znear/zfar = Isaac 腕摄 clippingRange 覆盖值 (0.001, 5.0)（MuJoCo 裁剪面全局） -->
+    <map znear="0.001" zfar="5"/>
+  </visual>
+  <default>
+    <geom friction="0.9 0.1 0.5" solimp="0.7 0.95 0.0001 0.5 2" solref="0.002 1.5"/>
+  </default>
+  <asset>
+    <texture name="orange_tex" type="2d" file="orange.png"/>
+    <texture name="cardboard_tex" type="2d" file="cardboard.png"/>
+    <!-- 橘子对暗度：Isaac 渲染里橘子比桌面暗（101 vs 154，比值 0.66/0.53/0.47），
+         直用贴图会反过来（亮橘暗桌，目标物对比度反号）——乘 0.62/0.78/1.0 校准 -->
+    <material name="orange_mat" texture="orange_tex" specular="0.2" shininess="0.2" rgba="0.40 0.50 0.64 1"/>
+    <material name="cardboard_mat" texture="cardboard_tex" specular="0.1" shininess="0.1"/>
+    <!-- 桌面色中性化（旧 0.55/0.45/0.35 过暖，Isaac 桌面 R-B 差仅 20） -->
+    <material name="table_mat" rgba="0.55 0.53 0.50 1"/>
+    <material name="floor_mat" rgba="0.62 0.62 0.64 1"/>
+    <mesh name="orange_mesh" file="orange.obj" scale="0.775 0.775 0.775"/>
+  </asset>
+  <worldbody>
+    <light directional="true" pos="0.2 -0.3 2.5" dir="0.05 0.05 -1" diffuse="0.38 0.38 0.38"/>
+    <light directional="true" pos="-1.5 -1.5 1.5" dir="0.6 0.6 -1" diffuse="0.10 0.10 0.10"/>
+    <!-- 固定总览相机（只用于查看/录屏，非策略观测） -->
+    <camera name="overview" pos="0.95 -0.95 0.75" xyaxes="0.639 0.767 0 -0.518 0.432 0.438"/>
+    <geom name="floor" type="plane" material="floor_mat" size="2 2 0.1" contype="2" conaffinity="3"/>
+    <geom name="table" type="box" pos="0.355 -0.452 0.001" size="0.5 0.225 0.04" material="table_mat" contype="2" conaffinity="3"/>
+    <!-- 橘子：视觉=贴纹网格 / 碰撞=同网格凸包（≈Isaac ConvexHull） -->
+    <body name="orange" pos="0.305 -0.36 0.09">
+      <!-- Isaac 侧橘子阻尼 linear 0.3 / angular 4.0；MuJoCo joint damping 是
+           标量（全 6 DOF 同值），取 0.3——线阻尼对齐，角阻尼低于 Isaac，
+           由扭转/滚动摩擦部分补偿（对拍阶段如出现橘子乱滚再补角阻尼） -->
+      <joint name="orange_root" type="free" damping="0.3"/>
+      <inertial pos="0 0 0" mass="0.023" diaginertia="7.3e-06 7.3e-06 7.3e-06"/>
+      <geom name="orange_visual" type="mesh" mesh="orange_mesh" material="orange_mat" contype="0" conaffinity="0" group="2"/>
+      <geom name="orange_collision" type="mesh" mesh="orange_mesh" contype="2" conaffinity="3" group="3"/>
+    </body>
+    <!-- 无顶纸盒：5 板（底 16×16×3mm + 四壁 50mm 高），origin 底面中心 -->
+    <body name="cardboard_box" pos="0.465 -0.425 0.046">
+      <freejoint name="box_root"/>
+      <inertial pos="0 0 0.025" mass="0.15" diaginertia="0.000351 0.000351 0.00064"/>
+      <geom name="box_floor" type="box" pos="0 0 0.0015" size="0.08 0.08 0.0015" material="cardboard_mat" contype="2" conaffinity="3"/>
+      <geom name="box_wall_y0" type="box" pos="0 -0.0785 0.025" size="0.08 0.0015 0.025" material="cardboard_mat" contype="2" conaffinity="3"/>
+      <geom name="box_wall_y1" type="box" pos="0 0.0785 0.025" size="0.08 0.0015 0.025" material="cardboard_mat" contype="2" conaffinity="3"/>
+      <geom name="box_wall_x0" type="box" pos="-0.0785 0 0.025" size="0.0015 0.077 0.025" material="cardboard_mat" contype="2" conaffinity="3"/>
+      <geom name="box_wall_x1" type="box" pos="0.0785 0 0.025" size="0.0015 0.077 0.025" material="cardboard_mat" contype="2" conaffinity="3"/>
+    </body>
+  </worldbody>
+  <keyframe>
+    <!-- SCAN_HOME 出生位形：关节=SCAN_HOME_ARM_JOINTS（camera_env_cfg.py:239-246），
+         橘/盒放双窗口中心（SCAN_ORANGE_WINDOW / HOME_BOX_WINDOW），初始查看用 -->
+    <key name="home"
+         qpos="-0.05 -0.907 0.19 1.58 -0.804 0.2555162024919699
+               0.305 -0.36 0.09 1 0 0 0
+               0.465 -0.425 0.046 1 0 0 0"
+         ctrl="-0.05 -0.907 0.19 1.58 -0.804 0.2555162024919699"/>
+  </keyframe>
+</mujoco>
