@@ -10,6 +10,7 @@ from isaaclab.utils import configclass
 from isaaclab_physx.physics import PhysxCfg
 
 from pick_anything.env_cfg import PickSceneCfg
+from pick_anything.paths import ASSETS_ROOT
 
 ARM_JOINT_NAMES = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
 
@@ -22,7 +23,11 @@ class PickRLSceneCfg(PickSceneCfg):
 
     ground: AssetBaseCfg = AssetBaseCfg(
         prim_path="/World/GroundPlane",
-        spawn=GroundPlaneCfg(),
+        # Keep the original ground and textures local so restarts do not
+        # depend on the remote asset client's download cache.
+        spawn=GroundPlaneCfg(
+            usd_path=str(ASSETS_ROOT / "environments/default_ground_plane/default_ground_plane.usda")
+        ),
         collision_group=-1,
     )
 

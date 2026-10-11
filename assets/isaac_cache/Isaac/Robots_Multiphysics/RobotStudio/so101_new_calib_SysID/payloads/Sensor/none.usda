@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    defaultPrim = "so101_new_calib"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def "so101_new_calib"
+{
+}
+

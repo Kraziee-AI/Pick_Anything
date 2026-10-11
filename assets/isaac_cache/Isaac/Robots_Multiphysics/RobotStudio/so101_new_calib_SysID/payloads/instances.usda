@@ -1,0 +1,1077 @@
+#usda 1.0
+(
+    customLayerData = {
+        dictionary cameraSettings = {
+            dictionary Front = {
+                double3 position = (5, 0, 0)
+                double radius = 5
+            }
+            dictionary Perspective = {
+                double3 position = (0.2512877461940315, 0.25128774619403355, 0.25128785953738947)
+                double3 target = (-3.9780384597509766e-8, -3.978038248808602e-8, 7.956076814030766e-8)
+            }
+            dictionary Right = {
+                double3 position = (0, -5, 0)
+                double radius = 5
+            }
+            dictionary Top = {
+                double3 position = (0, 0, 5)
+                double radius = 5
+            }
+            string boundCamera = "/OmniverseKit_Persp"
+        }
+        dictionary omni_layer = {
+            string authoring_layer = "./instances.usda"
+        }
+        dictionary renderSettings = {
+        }
+    }
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Scope "Instances"
+{
+    def Xform "mesh" (
+        prepend references = @./geometries.usd@</Geometries/mesh>
+    )
+    {
+        over "mesh" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh>
+    )
+    {
+        over "mesh" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_1_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_1>
+    )
+    {
+        over "mesh_1" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_1_1/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_1_2" (
+        prepend references = @./geometries.usd@</Geometries/mesh_1>
+    )
+    {
+        over "mesh_1" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_1_2/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_2" (
+        prepend references = @./geometries.usd@</Geometries/mesh_2>
+    )
+    {
+        over "mesh_2" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_2/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_2_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_2>
+    )
+    {
+        over "mesh_2" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_2_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_3" (
+        prepend references = @./geometries.usd@</Geometries/mesh_3>
+    )
+    {
+        over "mesh_3" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_3/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_3_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_3>
+    )
+    {
+        over "mesh_3" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_3_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_4" (
+        prepend references = @./geometries.usd@</Geometries/mesh_4>
+    )
+    {
+        over "mesh_4" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_4/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_4_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_4>
+    )
+    {
+        over "mesh_4" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_4_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_5" (
+        prepend references = @./geometries.usd@</Geometries/mesh_5>
+    )
+    {
+        over "mesh_5" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_5/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_5_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_5>
+    )
+    {
+        over "mesh_5" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_5_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_6" (
+        prepend references = @./geometries.usd@</Geometries/mesh_6>
+    )
+    {
+        over "mesh_6" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_6/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_6_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_6>
+    )
+    {
+        over "mesh_6" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_6_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_7" (
+        prepend references = @./geometries.usd@</Geometries/mesh_7>
+    )
+    {
+        over "mesh_7" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_7/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_7_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_7>
+    )
+    {
+        over "mesh_7" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_7_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_8" (
+        prepend references = @./geometries.usd@</Geometries/mesh_8>
+    )
+    {
+        over "mesh_8" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_8/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_8_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_8>
+    )
+    {
+        over "mesh_8" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_8_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_9" (
+        prepend references = @./geometries.usd@</Geometries/mesh_9>
+    )
+    {
+        over "mesh_9" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_9/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_9_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_9>
+    )
+    {
+        over "mesh_9" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_9_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_10" (
+        prepend references = @./geometries.usd@</Geometries/mesh_10>
+    )
+    {
+        over "mesh_10" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_10/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_10_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_10>
+    )
+    {
+        over "mesh_10" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_10_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_11" (
+        prepend references = @./geometries.usd@</Geometries/mesh_11>
+    )
+    {
+        over "mesh_11" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_11/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_11_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_11>
+    )
+    {
+        over "mesh_11" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_11_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_12" (
+        prepend references = @./geometries.usd@</Geometries/mesh_12>
+    )
+    {
+        over "mesh_12" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_12/VisualMaterials/DefaultMaterial>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mesh_12_1" (
+        prepend references = @./geometries.usd@</Geometries/mesh_12>
+    )
+    {
+        over "mesh_12" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "MaterialBindingAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/mesh_12_1/VisualMaterials/DefaultMaterial>
+            token physics:approximation = "convexHull"
+            uniform token purpose = "guide"
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "DefaultMaterial" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/DefaultMaterial>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "Cube_11" (
+        delete references = @geometries.usd@</Geometries/Cube_11>
+        prepend references = @./geometries.usd@</Geometries/Cube_11>
+    )
+    {
+        over "Cube_11" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.010"
+        }
+    }
+
+    def Xform "Cube_13" (
+        delete references = @geometries.usd@</Geometries/Cube_13>
+        prepend references = @./geometries.usd@</Geometries/Cube_13>
+    )
+    {
+        over "Cube_13" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.012"
+        }
+    }
+
+    def Xform "Cube_09" (
+        delete references = @geometries.usd@</Geometries/Cube_09>
+        prepend references = @./geometries.usd@</Geometries/Cube_09>
+    )
+    {
+        over "Cube_09" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.008"
+        }
+    }
+
+    def Xform "Cube_013" (
+        delete references = @geometries.usd@</Geometries/Cube_013>
+        prepend references = @./geometries.usd@</Geometries/Cube_013>
+    )
+    {
+        over "Cube_013" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.013"
+        }
+    }
+
+    def Xform "Cube_12" (
+        delete references = @geometries.usd@</Geometries/Cube_12>
+        prepend references = @./geometries.usd@</Geometries/Cube_12>
+    )
+    {
+        over "Cube_12" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.011"
+        }
+    }
+
+    def Xform "Cube_10" (
+        delete references = @geometries.usd@</Geometries/Cube_10>
+        prepend references = @./geometries.usd@</Geometries/Cube_10>
+    )
+    {
+        over "Cube_10" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.009"
+        }
+    }
+
+    def Xform "Cube_05" (
+        delete references = @geometries.usd@</Geometries/Cube_05>
+        prepend references = @./geometries.usd@</Geometries/Cube_05>
+    )
+    {
+        over "Cube_05" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.004"
+        }
+    }
+
+    def Xform "Cube_02" (
+        delete references = @geometries.usd@</Geometries/Cube_02>
+        prepend references = @./geometries.usd@</Geometries/Cube_02>
+    )
+    {
+        over "Cube_02" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.001"
+        }
+    }
+
+    def Xform "Cube_06" (
+        delete references = @geometries.usd@</Geometries/Cube_06>
+        prepend references = @./geometries.usd@</Geometries/Cube_06>
+    )
+    {
+        over "Cube_06" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.005"
+        }
+    }
+
+    def Xform "Cube_03" (
+        delete references = @geometries.usd@</Geometries/Cube_03>
+        prepend references = @./geometries.usd@</Geometries/Cube_03>
+    )
+    {
+        over "Cube_03" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.002"
+        }
+    }
+
+    def Xform "Cylinder_02" (
+        delete references = @geometries.usd@</Geometries/Cylinder_02>
+        prepend references = @./geometries.usd@</Geometries/Cylinder_02>
+    )
+    {
+        over "Cylinder_02" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cylinder.001"
+        }
+    }
+
+    def Xform "Cube_07" (
+        delete references = @geometries.usd@</Geometries/Cube_07>
+        prepend references = @./geometries.usd@</Geometries/Cube_07>
+    )
+    {
+        over "Cube_07" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.006"
+        }
+    }
+
+    def Xform "Cube_007" (
+        delete references = @geometries.usd@</Geometries/Cube_007>
+        prepend references = @./geometries.usd@</Geometries/Cube_007>
+    )
+    {
+        over "Cube_007" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.007"
+        }
+    }
+
+    def Xform "Cube_04" (
+        delete references = @geometries.usd@</Geometries/Cube_04>
+        prepend references = @./geometries.usd@</Geometries/Cube_04>
+    )
+    {
+        over "Cube_04" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube.003"
+        }
+    }
+
+    def Xform "Cylinder_01" (
+        delete references = @geometries.usd@</Geometries/Cylinder_01>
+        prepend references = @./geometries.usd@</Geometries/Cylinder_01>
+    )
+    {
+        over "Cylinder_01" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cylinder"
+        }
+    }
+}
+
+def "Render" (
+    hide_in_stage_window = true
+    no_delete = true
+)
+{
+    def "OmniverseKit"
+    {
+        def "HydraTextures" (
+            hide_in_stage_window = true
+            no_delete = true
+        )
+        {
+            def RenderProduct "omni_kit_widget_viewport_ViewportTexture_0" (
+                prepend apiSchemas = ["OmniRtxSettingsCommonAdvancedAPI_1", "OmniRtxSettingsRtAdvancedAPI_1", "OmniRtxSettingsPtAdvancedAPI_1", "OmniRtxSettingsParticleFieldAPI_1", "OmniRtxPostColorGradingAPI_1", "OmniRtxPostChromaticAberrationAPI_1", "OmniRtxPostBloomPhysicalAPI_1", "OmniRtxPostMatteObjectAPI_1", "OmniRtxPostCompositingAPI_1", "OmniRtxPostDofAPI_1", "OmniRtxPostMotionBlurAPI_1", "OmniRtxPostTvNoiseAPI_1", "OmniRtxPostTonemapIrayReinhardAPI_1", "OmniRtxPostDebugSettingsAPI_1", "OmniRtxDebugSettingsAPI_1"]
+                hide_in_stage_window = true
+                no_delete = true
+            )
+            {
+                rel camera = </OmniverseKit_Persp>
+                token omni:rtx:ambientOcclusion:denoiserMode = "none"
+                token omni:rtx:background:source:texture:textureMode = "repeatMirrored"
+                token omni:rtx:background:source:type = "domeLight"
+                bool omni:rtx:debug:view:pixelDebug:enableFixedTextPos = 1
+                token omni:rtx:directLighting:sampledLighting:denoisingTechnique = "None"
+                bool omni:rtx:dlss:frameGeneration = 0
+                bool omni:rtx:indirectDiffuse:denoiser:enabled = 0
+                bool omni:rtx:material:db:syncLoads = 1
+                token omni:rtx:post:dlss:execMode = "performance"
+                bool omni:rtx:post:registeredCompositing:invertColorCorrection = 1
+                bool omni:rtx:post:registeredCompositing:invertToneMap = 1
+                bool omni:rtx:pt:adaptiveSampling:filterError = 0
+                uint omni:rtx:pt:adaptiveSampling:fixedSppIterations = 2
+                uint omni:rtx:pt:maxSamplesPerLaunch = 2073600
+                uint omni:rtx:pt:mgpu:maxPixelsPerRegionExponent = 12
+                bool omni:rtx:reflections:denoiser:enabled = 0
+                token omni:rtx:rendermode = "RealTimePathTracing"
+                color3f omni:rtx:rt:ambientLight:color = (0.1, 0.1, 0.1)
+                bool omni:rtx:rt:demoire = 0
+                bool omni:rtx:rt:lightcache:spatialCache:dontResolveConflicts = 1
+                int omni:rtx:rt:sss:samples = 1
+                uint omni:rtx:rtpt:maxVolumeBounces = 15
+                float omni:rtx:rtpt:modulatingRoughnessThreshold = 0.08
+                bool omni:rtx:scene:hydra:materialSyncLoads = 1
+                bool omni:rtx:scene:hydra:mdlMaterialWarmup = 1
+                rel orderedVars = </Render/Vars/LdrColor>
+                custom bool overrideClipRange = 0
+                uniform int2 resolution = (1280, 720)
+            }
+        }
+    }
+
+    def RenderSettings "OmniverseGlobalRenderSettings" (
+        prepend apiSchemas = ["OmniRtxSettingsGlobalRtAdvancedAPI_1", "OmniRtxSettingsGlobalPtAdvancedAPI_1"]
+        no_delete = true
+    )
+    {
+        rel products = </Render/OmniverseKit/HydraTextures/omni_kit_widget_viewport_ViewportTexture_0>
+    }
+
+    def "Vars" (
+        hide_in_stage_window = true
+        no_delete = true
+    )
+    {
+        def RenderVar "LdrColor" (
+            hide_in_stage_window = true
+            no_delete = true
+        )
+        {
+            uniform string sourceName = "LdrColor"
+            uniform token sourceType = "raw"
+        }
+    }
+}
+
+over "OmniverseKit_Persp" (
+    prepend apiSchemas = ["OmniRtxCameraAutoExposureAPI_1", "OmniRtxCameraExposureAPI_1"]
+    customData = {
+        dictionary omni = {
+            dictionary kit = {
+                bool hide_in_stage_window = 1
+                bool no_delete = 1
+            }
+        }
+    }
+    hide_in_stage_window = true
+    kind = "component"
+    no_delete = true
+)
+{
+    float2 clippingRange = (0.01, 10000000)
+    float exposure:fStop = 5
+    float exposure:responsivity = 1.1026709
+    float exposure:time = 0.02
+    float focalLength = 18.147562
+    float focusDistance = 400
+    custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -0.4352432091663542)
+    float3 xformOp:rotateXYZ = (54.73561, -6.3611094e-15, 135)
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0.2512877461940315, 0.25128774619403355, 0.25128785953738947)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+}
+
+over "OmniverseKit_Front" (
+    customData = {
+        dictionary omni = {
+            dictionary kit = {
+                bool hide_in_stage_window = 1
+                bool no_delete = 1
+            }
+        }
+    }
+    hide_in_stage_window = true
+    kind = "component"
+    no_delete = true
+)
+{
+    float2 clippingRange = (1, 10000000)
+    float horizontalAperture = 50
+    custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -5)
+    token projection = "orthographic"
+    float verticalAperture = 50
+    float3 xformOp:rotateXYZ = (90, -1.2722219e-14, 90)
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (5, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+}
+
+over "OmniverseKit_Right" (
+    customData = {
+        dictionary omni = {
+            dictionary kit = {
+                bool hide_in_stage_window = 1
+                bool no_delete = 1
+            }
+        }
+    }
+    hide_in_stage_window = true
+    kind = "component"
+    no_delete = true
+)
+{
+    float2 clippingRange = (1, 10000000)
+    float horizontalAperture = 50
+    custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -5)
+    token projection = "orthographic"
+    float verticalAperture = 50
+    float3 xformOp:rotateXYZ = (90, -1.41245e-30, 1.2722219e-14)
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0, -5, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+}
+
+over "OmniverseKit_Top" (
+    customData = {
+        dictionary omni = {
+            dictionary kit = {
+                bool hide_in_stage_window = 1
+                bool no_delete = 1
+            }
+        }
+    }
+    hide_in_stage_window = true
+    kind = "component"
+    no_delete = true
+)
+{
+    float2 clippingRange = (1, 10000000)
+    float horizontalAperture = 50
+    custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -5)
+    token projection = "orthographic"
+    float verticalAperture = 50
+    float3 xformOp:rotateXYZ = (-1.2722219e-14, -7.016709e-15, -90)
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0, 0, 5)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+}
+

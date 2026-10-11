@@ -1,0 +1,1076 @@
+#usda 1.0
+(
+    customLayerData = {
+        dictionary cameraSettings = {
+            dictionary Front = {
+                double3 position = (5, 0, 0)
+                double radius = 5
+            }
+            dictionary Perspective = {
+                double3 position = (0.5639759217253768, 0.07624177033610059, 0.467052687692927)
+                double3 target = (-0.6005991028044226, -0.42073092430800535, -0.10423870027495813)
+            }
+            dictionary Right = {
+                double3 position = (0, -5, 0)
+                double radius = 5
+            }
+            dictionary Top = {
+                double3 position = (0, 0, 5)
+                double radius = 5
+            }
+            string boundCamera = "/OmniverseKit_Persp"
+        }
+        dictionary omni_layer = {
+            string authoring_layer = "./base.usda"
+        }
+        dictionary renderSettings = {
+        }
+    }
+    defaultPrim = "so101_new_calib"
+    metersPerUnit = 1
+    subLayers = [
+        @./robot.usda@
+    ]
+    upAxis = "Z"
+)
+
+def Xform "so101_new_calib"
+{
+    quatd xformOp:orient = (1, 0, 0, 0)
+    double3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+    def Xform "base"
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+        )
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "baseframe"
+        {
+            quatd xformOp:orient = (1, 1.3877799388343032e-17, -4.763979934278074e-30, 0)
+            double3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (0.02079099975526333, 0.01576079986989498, 0.03248170018196106)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "base_motor_holder_so101_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, 0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.02069149911, 0.02212549932, 0.03008170053)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "base_so101_v2" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_1_1>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, 0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.02079089917, 0.02212549932, 0.03008170053)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "sts3215_03a_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_sts3215> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, 0, 0, -0.707108045)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.02079089917, -0.01057450008, 0.07618170232)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "waveshare_mounting_plate_so101_v2" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_3>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, 0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.02059149928, 0.04674350098, 0.07988169789)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "base_motor_holder_so101_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, 0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.02069149911, 0.02212549932, 0.03008170053)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "base_so101_v2" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_1_2>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, 0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.02079089917, 0.02212549932, 0.03008170053)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "sts3215_03a_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, 0, 0, -0.707108045)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.02079089917, -0.01057450008, 0.07618170232)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "waveshare_mounting_plate_so101_v2" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_3_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, 0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.02059149928, 0.04674350098, 0.07988169789)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+    }
+
+    def Xform "shoulder"
+    {
+        quatd xformOp:orient = (8.963205004874908e-7, -0.7071055173873901, -0.7071080803871155, 8.963237405623659e-7)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.02079089917242527, -0.023074500262737274, 0.09488169848918915)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "sts3215_03a_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_sts3215> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.4999982119, 0.4999999801, 0.4999999801, -0.5000018279)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.03039919958, 0.0004222409916, -0.04170000181)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "motor_holder_so101_base_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_4>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.4999982119, 0.4999999801, -0.4999999801, 0.5000018279)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.06759919971, -0.0001777589932, 0.0158498995)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "rotation_pitch_so101_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_5>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, -0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.01220079977, 0.00002224130003, 0.04639999941)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "sts3215_03a_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.4999982119, 0.4999999801, 0.4999999801, -0.5000018279)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.03039919958, 0.0004222409916, -0.04170000181)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "motor_holder_so101_base_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_4_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.4999982119, 0.4999999801, -0.4999999801, 0.5000018279)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.06759919971, -0.0001777589932, 0.0158498995)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "rotation_pitch_so101_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_5_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, -0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.01220079977, 0.00002224130003, 0.04639999941)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+    }
+
+    def Scope "joints"
+    {
+    }
+
+    def Xform "upper_arm"
+    {
+        quatd xformOp:orient = (-0.7071058750152588, 0.000003845626451948192, -0.7071077823638916, -0.0000012814998626708984)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.0025133490562438965, -0.05347376689314842, 0.149081751704216)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "sts3215_03a_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_sts3215> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (8.963205005e-7, -0.7071054997, 0.7071080627, -8.963237181e-7)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.1125700027, -0.01549999975, 0.0186999999)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "upper_arm_so101_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_6>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.000001267590847, 1, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.06508500129, 0.0120000001, 0.01820000075)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "sts3215_03a_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (8.963205005e-7, -0.7071054997, 0.7071080627, -8.963237181e-7)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.1125700027, -0.01549999975, 0.0186999999)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "upper_arm_so101_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_6_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.000001267590847, 1, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.06508500129, 0.0120000001, 0.01820000075)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+    }
+
+    def Xform "lower_arm"
+    {
+        quatd xformOp:orient = (-0.4999975860118866, -0.49999889731407166, -0.5000025629997253, -0.5000011920928955)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.00251384056173265, -0.08147336542606354, 0.261651873588562)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "under_arm_so101_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_7>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.000001267590847, -1, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.06484989822, -0.03200000152, 0.01820000075)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "motor_holder_so101_wrist_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_8>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.000001267590847, -1, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.06484989822, -0.03200000152, 0.01799999923)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "sts3215_03a_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_sts3215> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0, 0.000001267590847, -1, 0.000001267590847)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.1224000007, 0.005200000014, 0.0186999999)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "under_arm_so101_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_7_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.000001267590847, -1, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.06484989822, -0.03200000152, 0.01820000075)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "motor_holder_so101_wrist_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_8_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.000001267590847, -1, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.06484989822, -0.03200000152, 0.01799999923)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "sts3215_03a_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0, 0.000001267590847, -1, 0.000001267590847)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.1224000007, 0.005200000014, 0.0186999999)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+    }
+
+    def Xform "wrist"
+    {
+        quatd xformOp:orient = (-0.7071059346199036, 0.000003874301910400391, -0.7071078419685364, -0.0000012516975402832031)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.002514801686629653, -0.21637339890003204, 0.26685187220573425)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "sts3215_03a_no_horn_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_9>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_sts3215> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.4999982119, 0.4999999801, 0.4999999801, -0.5000018279)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (5.551119755e-17, -0.04239999875, 0.03060000017)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "wrist_roll_pitch_so101_v2" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_10>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.4999982119, -0.4999999801, -0.4999999801, -0.5000018279)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0, -0.02800000086, 0.01810000092)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "sts3215_03a_no_horn_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_9_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.4999982119, 0.4999999801, 0.4999999801, -0.5000018279)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (5.551119755e-17, -0.04239999875, 0.03060000017)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "wrist_roll_pitch_so101_v2" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_10_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.4999982119, -0.4999999801, -0.4999999801, -0.5000018279)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0, -0.02800000086, 0.01810000092)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+    }
+
+    def Xform "gripper"
+    {
+        quatd xformOp:orient = (0.5000019669532776, -0.49999964237213135, -0.5000036358833313, -0.4999951124191284)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.02061525173485279, -0.2774733006954193, 0.2668520510196686)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "gripperframe"
+        {
+            quatd xformOp:orient = (0.49999821186065674, 0.5, 0.500001847743988, 0.5)
+            double3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (-0.007899999618530273, -0.0002181210002163425, -0.09812740236520767)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "sts3215_03a_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_sts3215> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, -0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.007699999958, 0.00009999999747, -0.02339999937)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "wrist_roll_follower_so101_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_11>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.000001267590847, -1, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (5.551119755e-17, -0.0002182140015, 0.0009497060091)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "sts3215_03a_v1" (
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_2_1>
+            )
+            {
+                uniform token purpose = "guide"
+                token visibility = "inherited"
+                quatd xformOp:orient = (0.7071055174, -0.707108045, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.007699999958, 0.00009999999747, -0.02339999937)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "wrist_roll_follower_so101_v1"
+            {
+                uniform token purpose = "guide"
+                custom string userProperties:blender:object_name = "gripper_col"
+                token visibility = "invisible"
+                quatd xformOp:orient = (0.7071067811865476, 0, 0.7071067811865475, 0)
+                float3 xformOp:rotateXYZ = (0, -90, -180)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (5.551119755337213e-17, -0.000218214001506567, 0.0009497060091234744)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+                def Xform "Cube_11" (
+                    active = true
+                    instanceable = true
+                    delete references = @instances.usda@</Instances/Cube_11>
+                    prepend references = @./instances.usda@</Instances/Cube_11>
+                )
+                {
+                    quatd xformOp:orient = (1, 0, 0, 0)
+                    double3 xformOp:scale = (1, 1, 1)
+                    double3 xformOp:translate = (0.07446918052, 2.303949029e-9, -0.01855467064)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Xform "Cube_13" (
+                    active = true
+                    instanceable = true
+                    delete references = @instances.usda@</Instances/Cube_13>
+                    prepend references = @./instances.usda@</Instances/Cube_13>
+                )
+                {
+                    quatd xformOp:orient = (1, 0, 0, 0)
+                    double3 xformOp:scale = (1, 1, 1)
+                    double3 xformOp:translate = (0.02389621895, -2.697642773e-18, -0.02202789289)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Xform "Cube_09" (
+                    active = true
+                    instanceable = true
+                    delete references = @instances.usda@</Instances/Cube_09>
+                    prepend references = @./instances.usda@</Instances/Cube_09>
+                )
+                {
+                    quatd xformOp:orient = (1, 0, 0, 0)
+                    double3 xformOp:scale = (1, 1, 1)
+                    double3 xformOp:translate = (0.09953665893, 2.071118385e-9, -0.0119890998)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Xform "Cube_013" (
+                    active = true
+                    instanceable = true
+                    delete references = @instances.usda@</Instances/Cube_013>
+                    prepend references = @./instances.usda@</Instances/Cube_013>
+                )
+                {
+                    quatd xformOp:orient = (1, 0, 0, 0)
+                    double3 xformOp:scale = (1, 1, 1)
+                    double3 xformOp:translate = (0.0236068384, 2.769610316e-9, -0.007172210041)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Xform "Cube_12" (
+                    active = true
+                    instanceable = true
+                    delete references = @instances.usda@</Instances/Cube_12>
+                    prepend references = @./instances.usda@</Instances/Cube_12>
+                )
+                {
+                    quatd xformOp:orient = (1, 0, 0, 0)
+                    double3 xformOp:scale = (1, 1, 1)
+                    double3 xformOp:translate = (0.05387327235, 2.071118385e-9, -0.02307547433)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Xform "Cube_10" (
+                    active = true
+                    instanceable = true
+                    delete references = @instances.usda@</Instances/Cube_10>
+                    prepend references = @./instances.usda@</Instances/Cube_10>
+                )
+                {
+                    quatd xformOp:orient = (1, 0, 0, 0)
+                    double3 xformOp:scale = (1, 1, 1)
+                    double3 xformOp:translate = (0.08926332157, 2.071118385e-9, -0.01510555846)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                over "mesh" (
+                    apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+                )
+                {
+                    uniform token physics:approximation = "convexHull"
+                }
+            }
+        }
+    }
+
+    def Xform "moving_jaw_so101_v1"
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+        )
+        quatd xformOp:orient = (0.7071079611778259, 0.0000029206275939941406, -0.7071058750152588, 0.0000073015689849853516)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.03941557556390762, -0.3008729815483093, 0.2870521545410156)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "visuals" (
+            instanceable = false
+        )
+        {
+            def Xform "moving_jaw_so101_v1" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                instanceable = true
+                prepend references = @./instances.usda@</Instances/mesh_12>
+            )
+            {
+                rel material:binding = </so101_new_calib/Looks/material_a_d_printed> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                token visibility = "inherited"
+                quatd xformOp:orient = (1, 0, 0, 0)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-5.551119755e-17, -1.947459937e-17, 0.01889999956)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+
+        def Xform "collisions" (
+            instanceable = false
+        )
+        {
+            def Xform "Cube_05" (
+                active = true
+                instanceable = true
+                delete references = @instances.usda@</Instances/Cube_05>
+                prepend references = @./instances.usda@</Instances/Cube_05>
+            )
+            {
+                quatd xformOp:orient = (0.49999999999999994, -0.5000000000000001, 0.5000000000000001, -0.5)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.0006168186665000408, -0.036364406350000045, 0.018899998654279482)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "Cube_02" (
+                active = true
+                instanceable = true
+                delete references = @instances.usda@</Instances/Cube_02>
+                prepend references = @./instances.usda@</Instances/Cube_02>
+            )
+            {
+                quatd xformOp:orient = (0.49999999999999994, -0.5000000000000001, 0.5000000000000001, -0.5)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.007896840572000074, -0.07659551501000006, 0.01889999888711012)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "Cube_06" (
+                active = true
+                instanceable = true
+                delete references = @instances.usda@</Instances/Cube_06>
+                prepend references = @./instances.usda@</Instances/Cube_06>
+            )
+            {
+                quatd xformOp:orient = (0.49999999999999994, -0.5000000000000001, 0.5000000000000001, -0.5)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.00033348798749999187, -0.017924129960000035, 0.018899997257295624)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "Cube_03" (
+                active = true
+                instanceable = true
+                delete references = @instances.usda@</Instances/Cube_03>
+                prepend references = @./instances.usda@</Instances/Cube_03>
+            )
+            {
+                quatd xformOp:orient = (0.49999999999999994, -0.5000000000000001, 0.5000000000000001, -0.5)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.004521667957000042, -0.06644535065000001, 0.01889999888711012)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "Cylinder_02" (
+                active = true
+                instanceable = true
+                delete references = @instances.usda@</Instances/Cylinder_02>
+                prepend references = @./instances.usda@</Instances/Cylinder_02>
+            )
+            {
+                quatd xformOp:orient = (0.49999999999999994, -0.5000000000000001, 0.5000000000000001, -0.5)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.000362992286699948, 0.0005430579184999562, 0.03941918722892563)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "Cube_07" (
+                active = true
+                instanceable = true
+                delete references = @instances.usda@</Instances/Cube_07>
+                prepend references = @./instances.usda@</Instances/Cube_07>
+            )
+            {
+                quatd xformOp:orient = (0.49999999999999994, -0.5000000000000001, 0.5000000000000001, -0.5)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.0002458095550999517, -0.007311433553999991, -0.001999812201074383)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "Cube_007" (
+                active = true
+                instanceable = true
+                delete references = @instances.usda@</Instances/Cube_007>
+                prepend references = @./instances.usda@</Instances/Cube_007>
+            )
+            {
+                quatd xformOp:orient = (0.49999999999999994, -0.5000000000000001, 0.5000000000000001, -0.5)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.0002458095550999517, -0.007311433554000046, 0.03979982994892562)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "Cube_04" (
+                active = true
+                instanceable = true
+                delete references = @instances.usda@</Instances/Cube_04>
+                prepend references = @./instances.usda@</Instances/Cube_04>
+            )
+            {
+                quatd xformOp:orient = (0.49999999999999994, -0.5000000000000001, 0.5000000000000001, -0.5)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (-0.0018609762190000545, -0.05629521608000004, 0.01889999865427948)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "Cylinder_01" (
+                active = true
+                instanceable = true
+                delete references = @instances.usda@</Instances/Cylinder_01>
+                prepend references = @./instances.usda@</Instances/Cylinder_01>
+            )
+            {
+                quatd xformOp:orient = (0.49999999999999994, -0.5000000000000001, 0.5000000000000001, -0.5)
+                double3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.000362992286699948, 0.0005430579184999562, -0.0016191694910743792)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+        }
+    }
+
+    def Scope "Looks"
+    {
+        def Material "material_a_d_printed" (
+            instanceable = true
+            prepend references = @./materials.usda@</Materials/material_a_d_printed>
+        )
+        {
+        }
+
+        def Material "material_sts3215" (
+            instanceable = true
+            prepend references = @./materials.usda@</Materials/material_sts3215>
+        )
+        {
+        }
+    }
+
+    def Scope "VisualMaterials"
+    {
+    }
+}
+
+def "Render" (
+    hide_in_stage_window = true
+    no_delete = true
+)
+{
+    def "OmniverseKit"
+    {
+        def "HydraTextures" (
+            hide_in_stage_window = true
+            no_delete = true
+        )
+        {
+            def RenderProduct "omni_kit_widget_viewport_ViewportTexture_0" (
+                prepend apiSchemas = ["OmniRtxSettingsCommonAdvancedAPI_1", "OmniRtxSettingsRtAdvancedAPI_1", "OmniRtxSettingsPtAdvancedAPI_1", "OmniRtxSettingsParticleFieldAPI_1", "OmniRtxPostColorGradingAPI_1", "OmniRtxPostChromaticAberrationAPI_1", "OmniRtxPostBloomPhysicalAPI_1", "OmniRtxPostMatteObjectAPI_1", "OmniRtxPostCompositingAPI_1", "OmniRtxPostDofAPI_1", "OmniRtxPostMotionBlurAPI_1", "OmniRtxPostTvNoiseAPI_1", "OmniRtxPostTonemapIrayReinhardAPI_1", "OmniRtxPostDebugSettingsAPI_1", "OmniRtxDebugSettingsAPI_1"]
+                hide_in_stage_window = true
+                no_delete = true
+            )
+            {
+                rel camera = </OmniverseKit_Persp>
+                token omni:rtx:ambientOcclusion:denoiserMode = "none"
+                token omni:rtx:background:source:texture:textureMode = "repeatMirrored"
+                token omni:rtx:background:source:type = "domeLight"
+                bool omni:rtx:debug:view:pixelDebug:enableFixedTextPos = 1
+                token omni:rtx:directLighting:sampledLighting:denoisingTechnique = "None"
+                bool omni:rtx:dlss:frameGeneration = 0
+                bool omni:rtx:indirectDiffuse:denoiser:enabled = 0
+                bool omni:rtx:material:db:syncLoads = 1
+                token omni:rtx:post:dlss:execMode = "performance"
+                bool omni:rtx:post:registeredCompositing:invertColorCorrection = 1
+                bool omni:rtx:post:registeredCompositing:invertToneMap = 1
+                bool omni:rtx:pt:adaptiveSampling:filterError = 0
+                uint omni:rtx:pt:adaptiveSampling:fixedSppIterations = 2
+                uint omni:rtx:pt:maxSamplesPerLaunch = 2073600
+                uint omni:rtx:pt:mgpu:maxPixelsPerRegionExponent = 12
+                bool omni:rtx:reflections:denoiser:enabled = 0
+                token omni:rtx:rendermode = "RealTimePathTracing"
+                color3f omni:rtx:rt:ambientLight:color = (0.1, 0.1, 0.1)
+                bool omni:rtx:rt:demoire = 0
+                bool omni:rtx:rt:lightcache:spatialCache:dontResolveConflicts = 1
+                int omni:rtx:rt:sss:samples = 1
+                uint omni:rtx:rtpt:maxVolumeBounces = 15
+                float omni:rtx:rtpt:modulatingRoughnessThreshold = 0.08
+                bool omni:rtx:scene:hydra:materialSyncLoads = 1
+                bool omni:rtx:scene:hydra:mdlMaterialWarmup = 1
+                rel orderedVars = </Render/Vars/LdrColor>
+                custom bool overrideClipRange = 0
+                uniform int2 resolution = (1280, 720)
+            }
+        }
+    }
+
+    def RenderSettings "OmniverseGlobalRenderSettings" (
+        prepend apiSchemas = ["OmniRtxSettingsGlobalRtAdvancedAPI_1", "OmniRtxSettingsGlobalPtAdvancedAPI_1"]
+        no_delete = true
+    )
+    {
+        rel products = </Render/OmniverseKit/HydraTextures/omni_kit_widget_viewport_ViewportTexture_0>
+    }
+
+    def "Vars" (
+        hide_in_stage_window = true
+        no_delete = true
+    )
+    {
+        def RenderVar "LdrColor" (
+            hide_in_stage_window = true
+            no_delete = true
+        )
+        {
+            uniform string sourceName = "LdrColor"
+            uniform token sourceType = "raw"
+        }
+    }
+}
+
+over "OmniverseKit_Persp" (
+    prepend apiSchemas = ["OmniRtxCameraAutoExposureAPI_1", "OmniRtxCameraExposureAPI_1"]
+    customData = {
+        dictionary omni = {
+            dictionary kit = {
+                bool hide_in_stage_window = 1
+                bool no_delete = 1
+            }
+        }
+    }
+    hide_in_stage_window = true
+    kind = "component"
+    no_delete = true
+)
+{
+    float2 clippingRange = (0.01, 10000000)
+    float exposure:fStop = 5
+    float exposure:responsivity = 1.1026709
+    float exposure:time = 0.02
+    float focalLength = 18.147562
+    float focusDistance = 400
+    custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -1.3890970797416138)
+    float3 xformOp:rotateXYZ = (65.71548, 1.5902774e-14, 113.10996)
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0.5639759217253768, 0.07624177033610059, 0.467052687692927)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+}
+
+over "OmniverseKit_Front" (
+    customData = {
+        dictionary omni = {
+            dictionary kit = {
+                bool hide_in_stage_window = 1
+                bool no_delete = 1
+            }
+        }
+    }
+    hide_in_stage_window = true
+    kind = "component"
+    no_delete = true
+)
+{
+    float2 clippingRange = (1, 10000000)
+    float horizontalAperture = 50
+    custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -5)
+    token projection = "orthographic"
+    float verticalAperture = 50
+    float3 xformOp:rotateXYZ = (90, -1.2722219e-14, 90)
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (5, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+}
+
+over "OmniverseKit_Right" (
+    customData = {
+        dictionary omni = {
+            dictionary kit = {
+                bool hide_in_stage_window = 1
+                bool no_delete = 1
+            }
+        }
+    }
+    hide_in_stage_window = true
+    kind = "component"
+    no_delete = true
+)
+{
+    float2 clippingRange = (1, 10000000)
+    float horizontalAperture = 50
+    custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -5)
+    token projection = "orthographic"
+    float verticalAperture = 50
+    float3 xformOp:rotateXYZ = (90, -1.41245e-30, 1.2722219e-14)
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0, -5, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+}
+
+over "OmniverseKit_Top" (
+    customData = {
+        dictionary omni = {
+            dictionary kit = {
+                bool hide_in_stage_window = 1
+                bool no_delete = 1
+            }
+        }
+    }
+    hide_in_stage_window = true
+    kind = "component"
+    no_delete = true
+)
+{
+    float2 clippingRange = (1, 10000000)
+    float horizontalAperture = 50
+    custom uniform vector3d omni:kit:centerOfInterest = (0, 0, -5)
+    token projection = "orthographic"
+    float verticalAperture = 50
+    float3 xformOp:rotateXYZ = (-1.2722219e-14, -7.016709e-15, -90)
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0, 0, 5)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+}
+

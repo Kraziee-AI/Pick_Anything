@@ -1,0 +1,203 @@
+#usda 1.0
+(
+    customLayerData = {
+        dictionary cameraSettings = {
+            dictionary Front = {
+                double3 position = (5, 0.0715499136182997, 0.265500619515827)
+                double radius = 0.20182573795318604
+            }
+            dictionary Perspective = {
+                double3 position = (0.15926089623379897, -0.45463626538357643, 0.3167155647799662)
+                double3 target = (-0.177058653415133, -0.19125832771231227, 0.15812222398919434)
+            }
+            dictionary Right = {
+                double3 position = (0, -5, 0)
+                double radius = 5
+            }
+            dictionary Top = {
+                double3 position = (0.3383115628619252, 0.06644008470705483, 5)
+                double radius = 0.23574326038360596
+            }
+            string boundCamera = "/OmniverseKit_Persp"
+        }
+        dictionary metricsAssembler = {
+            dictionary "/so101_new_calib/BlackandBrassBowl_Large" = {
+            }
+            dictionary "/so101_new_calib/BlackandBrassBowl_Small" = {
+            }
+            dictionary "/so101_new_calib/DecorativeBowl" = {
+            }
+            dictionary "/so101_new_calib/Lychee01" = {
+            }
+            int version = 1
+        }
+        dictionary omni_layer = {
+            string authoring_layer = "./SO101_jaw.usda"
+            dictionary locked = {
+            }
+            dictionary muteness = {
+            }
+        }
+        int refinementOverrideImplVersion = 0
+        dictionary renderSettings = {
+        }
+    }
+    endTimeCode = 1000000
+    metersPerUnit = 1
+    startTimeCode = 0
+    timeCodesPerSecond = 60
+    upAxis = "Z"
+)
+
+def Scope "Instances"
+{
+    def Xform "Cone" (
+        prepend references = @./geometries.usd@</Geometries/Cone>
+    )
+    {
+        over "Cone" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "Cone"
+        }
+    }
+
+    def Xform "Cylinder_012" (
+        prepend references = @./geometries.usd@</Geometries/Cylinder_012>
+    )
+    {
+        over "Cylinder_012" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "Cylinder_012"
+        }
+    }
+
+    def Xform "Cube_004" (
+        prepend references = @./geometries.usd@</Geometries/Cube_004>
+    )
+    {
+        over "Cube_004" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "Cube_004"
+        }
+    }
+
+    def Xform "Cylinder_021" (
+        prepend references = @./geometries.usd@</Geometries/Cylinder_021>
+    )
+    {
+        over "Cylinder_021" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "Cylinder_021"
+        }
+    }
+
+    def Xform "Cube_009" (
+        prepend references = @./geometries.usd@</Geometries/Cube_009>
+    )
+    {
+        over "Cube_009" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "Cube_009"
+        }
+    }
+
+    def Xform "mesh_001" (
+        prepend references = @./geometries.usd@</Geometries/mesh_001>
+    )
+    {
+        over "mesh_001" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "mesh.001"
+        }
+    }
+
+    def Xform "Cylinder_019" (
+        prepend references = @./geometries.usd@</Geometries/Cylinder_019>
+    )
+    {
+        over "Cylinder_019" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "Cylinder_019"
+        }
+    }
+
+    def Xform "Sphere" (
+        prepend references = @./geometries.usd@</Geometries/Sphere>
+    )
+    {
+        over "Sphere" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "Sphere"
+        }
+    }
+
+    def Xform "Cylinder_023" (
+        prepend references = @./geometries.usd@</Geometries/Cylinder_023>
+    )
+    {
+        over "Cylinder_023" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "Cylinder_023"
+        }
+    }
+
+    def Xform "Cube_010" (
+        prepend references = @./geometries.usd@</Geometries/Cube_010>
+    )
+    {
+        over "Cube_010" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom string userProperties:blender:data_name = "Cube_010"
+        }
+    }
+
+    def Xform "Cube" (
+        prepend references = @./geometries.usd@</Geometries/Cube>
+    )
+    {
+        over "Cube" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cube"
+        }
+    }
+
+    def Xform "Cylinder" (
+        prepend references = @./geometries.usd@</Geometries/Cylinder>
+    )
+    {
+        over "Cylinder" (
+            apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxTriangleMeshCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxConvexHullCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            bool physics:collisionEnabled = 1
+            token purpose = "guide"
+            custom string userProperties:blender:data_name = "Cylinder"
+        }
+    }
+}
+

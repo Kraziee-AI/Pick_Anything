@@ -1,0 +1,13 @@
+#usda 1.0
+(
+    defaultPrim = "so101_new_calib"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "so101_new_calib" (
+    prepend references = @../so101-camera_mount/SO-101_camera_mount.usda@
+)
+{
+}
+

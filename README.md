@@ -10,7 +10,31 @@ Isaac Sim 仿真环境：桌子 + 桌上物体 + SO101 机械臂。
 ```bash
 conda activate isaaclab_61
 cd ~/IsaacLab_6.1/Pick_Anything
+export ISAACSIM_ASSET_ROOT="$PWD/assets/isaac_cache"
+export PYTHONDONTWRITEBYTECODE=1
 ```
+
+每个新开的训练、回放或评估终端都先执行上面的环境配置，再启动 Python。
+`ISAACSIM_ASSET_ROOT` 指向项目内的原版 Isaac 资产；同一终端只需设置一次，
+关闭终端或重启电脑后需重新设置。当前脚本不会自动设置这个变量。
+`PYTHONDONTWRITEBYTECODE=1` 用于避免生成 Python 字节码缓存，不影响训练或模型保存。
+
+### 本地 Isaac 资产缓存
+
+SO101 SysID 机器人、地面、箭头标记及其 USD／贴图依赖已缓存到
+`assets/isaac_cache/`。首次准备或缓存文件丢失时，在上述 Conda 环境中执行：
+
+```bash
+python scripts/cache_training_assets.py
+```
+
+脚本通过 HTTPS 下载原版资产，所有文件都保存在本项目内，并跳过已存在的文件。
+当前缓存包含 22 个文件；缓存完整时无需每次下载，电脑重启后这些文件仍保留。
+
+此前 Isaac 的资产客户端把下载内容缓存在 `/tmp/https/...`，临时缓存可能在重启后
+被清理。如果启动时报 `Unable to copy file` 或 `Failed to retrieve USD file`，
+先检查本地缓存是否完整，以及当前终端是否设置了 `ISAACSIM_ASSET_ROOT`。
+仅缓存地面不足以启动训练，机器人及其依赖也必须可用。
 
 ## 资产来源（已下载，均在 `assets/`）
 
@@ -20,6 +44,7 @@ cd ~/IsaacLab_6.1/Pick_Anything
 | `assets/scenes/table_with_cube/` | [leisaac release v0.1.2](https://github.com/LightwheelAI/leisaac/releases/tag/v0.1.2)（已从 scene.usd 中移除 cube） |
 | `assets/objects/apple/`（GraspNet 012）、`orange/`（GraspNet 016） | 本地 GraspNet 简化物体，经 `scripts/convert_graspnet_object.py` 生成 |
 | `assets/objects/cardboard_box/` | 程序化生成的无顶纸盒（16×16×5cm，5 面板），`scripts/make_cardboard_box.py` |
+| `assets/isaac_cache/` | NVIDIA Isaac Sim 6.1 原版 SO101 SysID 机器人、地面、箭头及依赖，`scripts/cache_training_assets.py` 缓存 |
 
 ## 运行
 
@@ -163,6 +188,42 @@ bash scripts/play_camera_smooth.sh
 该脚本使用 `Camera-Filtered-v0`、同一份 `model_13000.pt` 和实时播放，
 保留原有导出模型。滤波发生在动作执行层，不需要修改模型权重。
 详细参数和动作平滑评估见 [CAMERA_PPO_SMOOTHING.md](scripts/CAMERA_PPO_SMOOTHING.md)。
+
+### 重启后恢复纯摄像头 PPO 与掩码 PPO
+
+分别在两个终端执行文首的环境配置，再运行对应的续训命令。
+下面是 2026-10-11 恢复训练的示例；之后续训时，将 `--checkpoint` 换成
+对应训练目录中新保存的检查点，并按计划调整追加轮数。
+
+纯摄像头 PPO：从 `model_7700.pt` 恢复，追加 5300 轮，继续保存到 `models/camera_ppo/`：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python scripts/train_pick.py \
+  --rl_library rsl_rl \
+  --task Pick-Apple-SO101-Staged-Camera-v8 \
+  --num_envs 512 --device cuda:0 --seed 42 \
+  --max_iterations 5300 --viz none \
+  --experiment_name "$PWD/models/camera_ppo" \
+  --run_name retrain_resume \
+  --checkpoint "$PWD/models/camera_ppo/2026-10-10_17-08-41_retrain_resume/model_7700.pt"
+```
+
+橘子 RGB + GT 掩码 PPO：从 `model_2300.pt` 恢复，追加 11700 轮：
+
+```bash
+CUDA_VISIBLE_DEVICES=2 python scripts/train_grounded_pick.py \
+  --mask-backend gt \
+  --num_envs 512 --device cuda:0 --seed 42 \
+  --max_iterations 11700 --viz none \
+  --run_name orange_gt_v1_resume \
+  --checkpoint "$PWD/logs/rsl_rl/pick_orange_so101_grounded/2026-10-10_17-05-42_orange_gt_v1_resume/model_2300.pt"
+```
+
+`--max_iterations` 是本次追加的轮数，上述命令分别接着训练到约 13000／14000 轮。
+续训会创建新的时间戳目录；掩码权重继续写入 `logs/rsl_rl/pick_orange_so101_grounded/`。
+按实际占用选择不同的物理 GPU；显存不足时可减小 `--num_envs`。
+本地资产配置已通过两种任务各 4 环境、1 轮的检查点加载及 PPO 更新验证。
+掩码路线的训练、回放和评估说明见 [GROUNDED_PICK.md](GROUNDED_PICK.md)。
 
 ### 3. 教师到摄像头蒸馏：Camera-Distill-v10
 

@@ -1,0 +1,203 @@
+#usda 1.0
+(
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Scope "Materials"
+{
+    def Material "DefaultMaterial"
+    {
+        custom token[] omni:simready:nonvisual:attributes = ["none"]
+        custom token omni:simready:nonvisual:base = "aluminum"
+        custom token omni:simready:nonvisual:coating = "paint"
+        token outputs:displacement (
+            displayGroup = "Outputs"
+        )
+        prepend token outputs:mdl:displacement.connect = </Materials/DefaultMaterial/DefaultMaterial.outputs:out>
+        prepend token outputs:mdl:surface.connect = </Materials/DefaultMaterial/DefaultMaterial.outputs:out>
+        prepend token outputs:mdl:volume.connect = </Materials/DefaultMaterial/DefaultMaterial.outputs:out>
+        token outputs:surface (
+            displayGroup = "Outputs"
+        )
+        token outputs:volume (
+            displayGroup = "Outputs"
+        )
+
+        def Shader "DefaultMaterial" (
+            apiSchemas = ["NodeDefAPI"]
+        )
+        {
+            token info:implementationSource = "sourceAsset"
+            asset info:mdl:sourceAsset = @OmniPBR.mdl@
+            token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+            color3f inputs:diffuse_color_constant = (1, 1, 1) (
+                customData = {
+                    float3 default = (1, 1, 1)
+                    dictionary range = {
+                        float3 max = (1, 1, 1)
+                        float3 min = (0, 0, 0)
+                    }
+                }
+                displayGroup = "Albedo"
+            )
+            color3f inputs:emissive_color = (1, 1, 1) (
+                customData = {
+                    float3 default = (1, 1, 1)
+                    dictionary range = {
+                        float3 max = (1, 1, 1)
+                        float3 min = (0, 0, 0)
+                    }
+                }
+                displayGroup = "Emissive"
+            )
+            float inputs:emissive_intensity = 10000 (
+                customData = {
+                    double default = 10000
+                    dictionary range = {
+                        double max = 100000
+                        double min = 0
+                    }
+                }
+                displayGroup = "Emissive"
+            )
+            bool inputs:enable_emission = 0 (
+                customData = {
+                    bool default = 0
+                }
+                displayGroup = "Emissive"
+            )
+            bool inputs:enable_opacity = 0 (
+                customData = {
+                    bool default = 0
+                }
+                displayGroup = "Opacity"
+            )
+            bool inputs:enable_opacity_texture = 0 (
+                customData = {
+                    bool default = 0
+                }
+                displayGroup = "Opacity"
+            )
+            float inputs:opacity_constant = 1 (
+                customData = {
+                    double default = 1
+                    dictionary range = {
+                        double max = 1
+                        double min = 0
+                    }
+                }
+                displayGroup = "Opacity"
+            )
+            int inputs:opacity_mode = 1 (
+                customData = {
+                    int default = 1
+                    dictionary range = {
+                        int max = 3
+                        int min = 0
+                    }
+                }
+                displayGroup = "Opacity"
+                renderType = "::base::mono_mode"
+                sdrMetadata = {
+                    string __SDR__enum_value = "mono_average"
+                    string options = "mono_alpha:0|mono_average:1|mono_luminance:2|mono_maximum:3"
+                }
+            )
+            float inputs:opacity_threshold = 0 (
+                customData = {
+                    double default = 0
+                    dictionary range = {
+                        double max = 1
+                        double min = 0
+                    }
+                }
+                displayGroup = "Opacity"
+            )
+            float inputs:texture_rotate = 0 (
+                customData = {
+                    double default = 0
+                    dictionary range = {
+                        double max = 360
+                        double min = 0
+                    }
+                }
+                displayGroup = "UV"
+            )
+            float2 inputs:texture_scale = (1, 1) (
+                customData = {
+                    float2 default = (1, 1)
+                }
+                displayGroup = "UV"
+            )
+            float2 inputs:texture_translate = (0, 0) (
+                customData = {
+                    float2 default = (0, 0)
+                }
+                displayGroup = "UV"
+            )
+            token outputs:out
+        }
+    }
+
+    def Material "material_a_d_printed"
+    {
+        custom token[] omni:simready:nonvisual:attributes = ["none"]
+        custom token omni:simready:nonvisual:base = "aluminum"
+        custom token omni:simready:nonvisual:coating = "paint"
+        token outputs:displacement (
+            displayGroup = "Outputs"
+        )
+        prepend token outputs:mdl:displacement.connect = </Materials/material_a_d_printed/Shader.outputs:out>
+        prepend token outputs:mdl:surface.connect = </Materials/material_a_d_printed/Shader.outputs:out>
+        prepend token outputs:mdl:volume.connect = </Materials/material_a_d_printed/Shader.outputs:out>
+        token outputs:surface (
+            displayGroup = "Outputs"
+        )
+        token outputs:volume (
+            displayGroup = "Outputs"
+        )
+
+        def Shader "Shader" (
+            apiSchemas = ["NodeDefAPI"]
+        )
+        {
+            token info:implementationSource = "sourceAsset"
+            asset info:mdl:sourceAsset = @OmniPBR.mdl@
+            token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+            color3f inputs:diffuse_color_constant = (1, 0.82, 0.12)
+            token outputs:out
+        }
+    }
+
+    def Material "material_sts3215"
+    {
+        custom token[] omni:simready:nonvisual:attributes = ["none"]
+        custom token omni:simready:nonvisual:base = "aluminum"
+        custom token omni:simready:nonvisual:coating = "paint"
+        token outputs:displacement (
+            displayGroup = "Outputs"
+        )
+        prepend token outputs:mdl:displacement.connect = </Materials/material_sts3215/Shader.outputs:out>
+        prepend token outputs:mdl:surface.connect = </Materials/material_sts3215/Shader.outputs:out>
+        prepend token outputs:mdl:volume.connect = </Materials/material_sts3215/Shader.outputs:out>
+        token outputs:surface (
+            displayGroup = "Outputs"
+        )
+        token outputs:volume (
+            displayGroup = "Outputs"
+        )
+
+        def Shader "Shader" (
+            apiSchemas = ["NodeDefAPI"]
+        )
+        {
+            token info:implementationSource = "sourceAsset"
+            asset info:mdl:sourceAsset = @OmniPBR.mdl@
+            token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+            color3f inputs:diffuse_color_constant = (0.1, 0.1, 0.1)
+            token outputs:out
+        }
+    }
+}
+
