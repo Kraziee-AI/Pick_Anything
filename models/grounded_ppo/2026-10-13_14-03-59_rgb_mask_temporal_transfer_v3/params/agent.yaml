@@ -1,0 +1,87 @@
+seed: 42
+device: cuda:0
+num_steps_per_env: 64
+init_at_random_ep_len: true
+max_iterations: 2000
+empirical_normalization: {}
+obs_groups:
+  actor:
+  - rgb_mask
+  - proprioception
+  critic:
+  - critic
+clip_actions: 1.0
+check_for_nan: true
+save_interval: 100
+experiment_name: pick_orange_so101_grounded
+run_name: rgb_mask_temporal_transfer_v3
+logger: tensorboard
+neptune_project: isaaclab
+wandb_project: isaaclab
+resume: false
+load_run: .*
+load_checkpoint: /home/user123/IsaacLab_6.1/Pick_Anything/logs/rsl_rl/pick_orange_so101_grounded/2026-10-13_12-47-16_rgb_mask_temporal_transfer_v3/model_600.pt
+class_name: OnPolicyRunner
+actor:
+  class_name: CNNModel
+  hidden_dims:
+  - 256
+  - 128
+  activation: elu
+  obs_normalization: true
+  distribution_cfg:
+    class_name: GaussianDistribution
+    init_std: 0.2
+    std_type: log
+    std_range: !!python/tuple
+    - 0.05
+    - 0.3
+  cnn_cfg:
+    output_channels:
+    - 16
+    - 32
+    - 32
+    kernel_size:
+    - 5
+    - 3
+    - 3
+    stride:
+    - 2
+    - 2
+    - 2
+    dilation: 1
+    padding: none
+    norm: none
+    activation: elu
+    max_pool: false
+    global_pool: none
+    flatten: true
+critic:
+  class_name: MLPModel
+  hidden_dims:
+  - 512
+  - 256
+  - 128
+  activation: elu
+  obs_normalization: true
+  distribution_cfg: null
+algorithm:
+  class_name: PPO
+  num_learning_epochs: 5
+  num_mini_batches: 8
+  learning_rate: 2.0e-05
+  schedule: fixed
+  gamma: 0.995
+  lam: 0.95
+  entropy_coef: 0.0001
+  desired_kl: 0.01
+  max_grad_norm: 1.0
+  optimizer: adam
+  value_loss_coef: 1.0
+  use_clipped_value_loss: true
+  clip_param: 0.1
+  normalize_advantage_per_mini_batch: false
+  share_cnn_encoders: false
+  rnd_cfg: null
+  symmetry_cfg: null
+policy: {}

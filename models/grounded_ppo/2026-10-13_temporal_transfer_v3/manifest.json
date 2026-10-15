@@ -1,0 +1,18 @@
+{
+  "checkpoint": "model_148.pt",
+  "sha256": "a9e0008609d299bebedbe20e67ac480e5f9ab8f1616b4581d4ebd17f722bae9d",
+  "source_run": "outputs/grounded_pick/recovery_diagnosis/temporal_transfer_distance_pilot/2026-10-13_09-55-27_temporal_transfer_distance_pilot",
+  "task": "Pick-Orange-SO101-Grounded-v0",
+  "image_history": 3,
+  "channels_per_frame": 4,
+  "actor_proprioception": 24,
+  "critic_dimensions": 49,
+  "actions": 6,
+  "evaluation": "outputs/grounded_pick/recovery_diagnosis/transfer_final_148_20261013/aggregate.json",
+  "evaluation_episodes": 32,
+  "success": 27,
+  "success_rate": 0.84375,
+  "lift_ready": 28,
+  "all_successes_had_lift": true,
+  "scope": "Single orange, GT rectangle masks, simulation, HOME first episodes, seeds 42/43. No open-vocabulary or multi-target validation."
+}

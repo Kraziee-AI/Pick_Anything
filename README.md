@@ -337,3 +337,14 @@ scripts/
 - 桌面（已改为 1.0×0.45m 长方形）：x ∈ [-0.145, 0.855]，y ∈ [-0.677, -0.227]，顶面 z≈0.041
 - 机器人基座 (0.35, -0.64, 0.01)，从桌子后方伸向桌面，零位夹爪可达 y≈-0.34（0.30m）
 - 关节：shoulder_pan / shoulder_lift / elbow_flex / wrist_flex / wrist_roll / gripper
+
+## RGB＋目标掩码抓取
+
+掩码路线使用腕摄 RGB、目标矩形掩码及本体状态，可用 GroundingDINO 将语言目标转换为掩码。
+训练、三帧历史、RGB 策略初始化和最新归档权重见 [RGB_MASK_PPO.md](RGB_MASK_PPO.md)，
+基础接口见 [GROUNDED_PICK.md](GROUNDED_PICK.md)。
+
+最新归档 `model_2599.pt` 的真实 DINO 小样本评估：单橘子完整抓取放盒 **8/10**，
+10/10 抓起并抬升；多物体场景抓橘子 **0/10**。两套任务成功标准和出生分布不同。
+[逐回合报告](docs/evaluations/2026-10-14_model2599/REPORT.md)和
+[汇总 JSON](docs/evaluations/2026-10-14_model2599/SUMMARY.json)随代码保存。

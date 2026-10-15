@@ -1,0 +1,332 @@
+{
+  "checkpoint_sha256": "f4414a3811906a33b3eba0436140173d076dce08d601eeb87bebdb2bdc8a4386",
+  "physical_gpu": 0,
+  "target": "orange",
+  "detector_caption": "orange fruit.",
+  "mask_backend": "dino",
+  "scenes": {
+    "single": {
+      "episodes": 10,
+      "successes": 8,
+      "success_rate": 0.8,
+      "termination_counts": {
+        "success": 8,
+        "staged_orange_dropped": 1,
+        "time_out": 1
+      },
+      "milestone_counts": {
+        "grasped": 10,
+        "lifted": 10,
+        "over_box_latched": 9,
+        "in_box_latched": 1
+      },
+      "sources": [
+        "single_seed42_n4/orange_dino_seed42",
+        "single_seed43_n4/orange_dino_seed43",
+        "single_seed44_n2/orange_dino_seed44"
+      ],
+      "results": [
+        {
+          "seed": 42,
+          "env_id": 0,
+          "success": true,
+          "termination": [
+            "success"
+          ],
+          "max_stage": "PLACE",
+          "max_height_gain_m": 0.1094444990158081,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 4.866666666666666
+        },
+        {
+          "seed": 42,
+          "env_id": 1,
+          "success": false,
+          "termination": [
+            "staged_orange_dropped"
+          ],
+          "max_stage": "TRANSPORT",
+          "max_height_gain_m": 0.05696550011634827,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 7.766666666666667
+        },
+        {
+          "seed": 42,
+          "env_id": 2,
+          "success": true,
+          "termination": [
+            "success"
+          ],
+          "max_stage": "PLACE",
+          "max_height_gain_m": 0.10401380062103271,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 4.5
+        },
+        {
+          "seed": 42,
+          "env_id": 3,
+          "success": true,
+          "termination": [
+            "success"
+          ],
+          "max_stage": "PLACE",
+          "max_height_gain_m": 0.11735202372074127,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 4.066666666666666
+        },
+        {
+          "seed": 43,
+          "env_id": 0,
+          "success": true,
+          "termination": [
+            "success"
+          ],
+          "max_stage": "PLACE",
+          "max_height_gain_m": 0.1665635108947754,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 4.566666666666666
+        },
+        {
+          "seed": 43,
+          "env_id": 1,
+          "success": true,
+          "termination": [
+            "success"
+          ],
+          "max_stage": "PLACE",
+          "max_height_gain_m": 0.0832103043794632,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 4.266666666666667
+        },
+        {
+          "seed": 43,
+          "env_id": 2,
+          "success": true,
+          "termination": [
+            "success"
+          ],
+          "max_stage": "RELEASE",
+          "max_height_gain_m": 0.06913135945796967,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 4.433333333333334
+        },
+        {
+          "seed": 43,
+          "env_id": 3,
+          "success": false,
+          "termination": [
+            "time_out"
+          ],
+          "max_stage": "PLACE",
+          "max_height_gain_m": 0.20966413617134094,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 90.0
+        },
+        {
+          "seed": 44,
+          "env_id": 0,
+          "success": true,
+          "termination": [
+            "success"
+          ],
+          "max_stage": "PLACE",
+          "max_height_gain_m": 0.11059409379959106,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 4.233333333333333
+        },
+        {
+          "seed": 44,
+          "env_id": 1,
+          "success": true,
+          "termination": [
+            "success"
+          ],
+          "max_stage": "PLACE",
+          "max_height_gain_m": 0.13330456614494324,
+          "mask_nonempty_fraction": 1.0,
+          "grasp_continuous_3_steps": true,
+          "time_s": 5.366666666666666
+        }
+      ]
+    },
+    "multi": {
+      "episodes": 10,
+      "successes": 0,
+      "success_rate": 0.0,
+      "termination_counts": {
+        "time_out": 10
+      },
+      "milestone_counts": {
+        "grasped": 0,
+        "wrong_object_lifted": 1
+      },
+      "sources": [
+        "multi_seed42_n4/orange_dino_seed42",
+        "multi_seed43_n4/orange_dino_seed43",
+        "multi_seed44_n2/orange_dino_seed44"
+      ],
+      "results": [
+        {
+          "seed": 42,
+          "env_id": 0,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.00034812092781066895,
+          "max_rise_m": 0.0040000081062316895,
+          "wrong_object_lifted": false,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        },
+        {
+          "seed": 42,
+          "env_id": 1,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.00019444525241851807,
+          "max_rise_m": 0.010114334523677826,
+          "wrong_object_lifted": false,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        },
+        {
+          "seed": 42,
+          "env_id": 2,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.00034747272729873657,
+          "max_rise_m": 0.0040000081062316895,
+          "wrong_object_lifted": false,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        },
+        {
+          "seed": 42,
+          "env_id": 3,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.0003474876284599304,
+          "max_rise_m": 0.0040000081062316895,
+          "wrong_object_lifted": true,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        },
+        {
+          "seed": 43,
+          "env_id": 0,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.0003486946225166321,
+          "max_rise_m": 0.0040000081062316895,
+          "wrong_object_lifted": false,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        },
+        {
+          "seed": 43,
+          "env_id": 1,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.0003473013639450073,
+          "max_rise_m": 0.0040000081062316895,
+          "wrong_object_lifted": false,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        },
+        {
+          "seed": 43,
+          "env_id": 2,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.00034806132316589355,
+          "max_rise_m": 0.0040000081062316895,
+          "wrong_object_lifted": false,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        },
+        {
+          "seed": 43,
+          "env_id": 3,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.0003486424684524536,
+          "max_rise_m": 0.0040000081062316895,
+          "wrong_object_lifted": false,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        },
+        {
+          "seed": 44,
+          "env_id": 0,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.00034781545400619507,
+          "max_rise_m": 0.0040000081062316895,
+          "wrong_object_lifted": false,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        },
+        {
+          "seed": 44,
+          "env_id": 1,
+          "target_key": "orange",
+          "grasped": false,
+          "rise_m": -0.0003472864627838135,
+          "max_rise_m": 0.0040000081062316895,
+          "wrong_object_lifted": false,
+          "success": false,
+          "time_out": true,
+          "dropped_or_invalid": false,
+          "termination": [
+            "time_out"
+          ]
+        }
+      ]
+    }
+  },
+  "checkpoint": "/home/user123/IsaacLab_6.1/Pick_Anything/logs/rsl_rl/pick_orange_so101_grounded/2026-10-13_14-03-59_rgb_mask_temporal_transfer_v3/model_2599.pt"
+}

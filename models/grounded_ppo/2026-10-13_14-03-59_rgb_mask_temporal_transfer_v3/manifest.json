@@ -1,0 +1,46 @@
+{
+  "checkpoint": "model_2599.pt",
+  "source": "logs/rsl_rl/pick_orange_so101_grounded/2026-10-13_14-03-59_rgb_mask_temporal_transfer_v3/model_2599.pt",
+  "sha256": "f4414a3811906a33b3eba0436140173d076dce08d601eeb87bebdb2bdc8a4386",
+  "iteration": 2599,
+  "image_history": 3,
+  "policy_image_shape": [
+    12,
+    96,
+    128
+  ],
+  "proprioception_dim": 24,
+  "action_dim": 6,
+  "evaluation": {
+    "date": "2026-10-14",
+    "mask_backend": "dino",
+    "target": "orange",
+    "caption": "orange fruit.",
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "episodes_per_seed": [
+      4,
+      4,
+      2
+    ],
+    "single": {
+      "episodes": 10,
+      "successes": 8,
+      "grasped": 10,
+      "lifted": 10,
+      "success_criterion": "physical placement, withdrawal and settling"
+    },
+    "multi": {
+      "episodes": 10,
+      "successes": 0,
+      "success_criterion": "correct target held and raised 8cm for 5 steps"
+    }
+  },
+  "limitations": [
+    "Small-sample results; no verified multi-object generalization.",
+    "Full historical logs, frame dumps and detector cache remain local."
+  ]
+}

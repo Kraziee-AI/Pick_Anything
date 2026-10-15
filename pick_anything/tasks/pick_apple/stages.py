@@ -197,6 +197,7 @@ class StageProgress:
         step: torch.Tensor,
         cond: dict[str, torch.Tensor],
         confirm: dict[str, int],
+        update_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """按物理条件推进阶段，返回锁存的成功标志。
 
@@ -205,11 +206,12 @@ class StageProgress:
         顺序检查阶段 1..7：当前阶段条件连续达成足够步数则推进到下一阶段
         （推进即完成，一次性付奖），同一步允许连续推进多个阶段。
         """
-        self.just_completed.zero_()
+        mask = torch.ones_like(self.success) if update_mask is None else update_mask
+        self.just_completed = torch.where(mask[:, None], False, self.just_completed)
         first = self.first_step.clone()
-        self.first_step.fill_(False)
+        self.first_step &= ~mask
         # 出生后第一步：只锁存里程碑，不推进、不付奖（reset 沉降不是策略功劳）
-        gate = ~first
+        gate = ~first & mask
         names = [PickStage(k).name for k in range(0, NUM_STAGES - 1)]  # HOME..PLACE
         zeros = torch.zeros_like(self.stage)
         for name in names:
@@ -225,7 +227,7 @@ class StageProgress:
             # 该阶段独立计数：条件断则清零（贴边抖动无法累积确认）
             col = torch.where(cond.get(name, zeros), col + 1, torch.zeros_like(col))
             col = torch.where(gate, col, torch.zeros_like(col))
-            self.confirm_count[:, k] = col
+            self.confirm_count[:, k] = torch.where(mask, col, self.confirm_count[:, k])
             confirmed = met_now & (col >= need)
             if bool(confirmed.any()):
                 newly = confirmed & ~self.paid[:, k]
@@ -233,7 +235,7 @@ class StageProgress:
                 self.paid[:, k] = self.paid[:, k] | newly
                 self.stage = torch.where(confirmed, torch.full_like(self.stage, k + 1), self.stage)
             # 里程碑锁存保持物理事实（观测用，与阶段推进/付费独立）
-            raw = cond.get(name, zeros)
+            raw = cond.get(name, zeros) & mask
             if name == "PREGRASP":
                 self.pregrasp_latched |= raw
             elif name == "GRASP":
@@ -254,19 +256,21 @@ class StageProgress:
         # 两步，而悬停/戳橘子（在线率≪2/3）依旧净减永远攒不满，不放松对
         # "实质驻留门外+静置"的要求，也不打开刷分口子（成功是一次性终局奖）。
         release_ready = gate & cond.get("RELEASE", torch.zeros_like(self.success))
-        self.stable_count.copy_(
+        self.stable_count.copy_(torch.where(mask,
             torch.where(
                 release_ready,
                 self.stable_count + 1,
                 (self.stable_count - 2).clamp_min(0),
-            )
-        )
-        newly_successful = (~self.success) & (self.stable_count >= RELEASE_STABLE_STEPS)
+            ), self.stable_count,
+        ))
+        newly_successful = mask & (~self.success) & (self.stable_count >= RELEASE_STABLE_STEPS)
         self.time_to_success = torch.where(newly_successful, step, self.time_to_success)
         self.success |= newly_successful
         self.succeeded_episode |= newly_successful
         newly_paid = newly_successful & ~self.paid[:, int(PickStage.RELEASE)]
-        self.just_completed[:, int(PickStage.RELEASE)] = newly_paid
+        self.just_completed[:, int(PickStage.RELEASE)] = torch.where(
+            mask, newly_paid, self.just_completed[:, int(PickStage.RELEASE)],
+        )
         self.paid[:, int(PickStage.RELEASE)] |= newly_paid
         return self.success.clone()
 
@@ -283,3 +287,28 @@ class StageProgress:
             ],
             dim=-1,
         )
+
+
+class ConfirmedGraspStageProgress(StageProgress):
+    """Latch grasps after confirmed GRASP completion, preserving reset-bank seeds.
+
+    PREGRASP contacts must not close its not-grasped gate or disable approach
+    shaping. The legacy state machine remains available to existing tasks;
+    camera PPO and Grounded explicitly install this variant per environment.
+    """
+
+    grasp_semantics = "confirmed_GRASP_completion_or_reset_bank_seed"
+
+    def update(self, step, cond, confirm, update_mask=None):
+        grasp_stage = int(PickStage.GRASP)
+        already_grasped = self.grasped.clone()
+        # Earlier contacts cannot supply a head start on GRASP confirmation.
+        mask = torch.ones_like(self.grasped) if update_mask is None else update_mask
+        self.confirm_count[:, grasp_stage] = torch.where(
+            (self.stage >= grasp_stage) | ~mask, self.confirm_count[:, grasp_stage], 0,
+        )
+        result = super().update(step, cond, confirm, update_mask=mask)
+        # Only expose confirmed grasps to rewards, observations and the next
+        # physical-condition computation. Existing bank seeds stay latched.
+        self.grasped.copy_(already_grasped | self.just_completed[:, grasp_stage])
+        return result
