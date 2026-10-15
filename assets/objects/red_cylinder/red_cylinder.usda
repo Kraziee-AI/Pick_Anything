@@ -1,0 +1,62 @@
+#usda 1.0
+(
+    defaultPrim = "red_cylinder"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "red_cylinder" (
+    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+)
+{
+    float physics:mass = 0.03
+
+    def Scope "Looks"
+    {
+        def Material "Physics" (
+            prepend apiSchemas = ["PhysicsMaterialAPI"]
+        )
+        {
+            float physics:dynamicFriction = 0.65
+            float physics:restitution = 0.02
+            float physics:staticFriction = 0.8
+        }
+
+        def Material "Red"
+        {
+            token outputs:mdl:surface.connect = </red_cylinder/Looks/Red/MDL.outputs:out>
+            token outputs:surface.connect = </red_cylinder/Looks/Red/Preview.outputs:surface>
+
+            def Shader "Preview"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.8784314, 0.1764706, 0.16470589)
+                float inputs:roughness = 0.6
+                token outputs:surface
+            }
+
+            def Shader "MDL"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                asset inputs:diffuse_texture = @texture/Red.png@
+                float inputs:reflection_roughness_constant = 0.6
+                token outputs:out
+            }
+        }
+    }
+
+    def Cylinder "Cylinder" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        uniform token axis = "Z"
+        double height = 0.06
+        rel material:binding = </red_cylinder/Looks/Red>
+        rel material:binding:physics = </red_cylinder/Looks/Physics>
+        double radius = 0.021
+        double3 xformOp:translate = (0, 0, 0.03)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

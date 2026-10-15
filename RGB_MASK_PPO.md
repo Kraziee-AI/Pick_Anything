@@ -3,6 +3,7 @@
 当前目标是单橘子的 HOME → 抓起 → 放盒 → 撤爪完整任务。
 任务 ID：`Pick-Orange-SO101-Grounded-v0`；先用 GT 矩形掩码，之后接语言检测。
 使用 Conda `isaaclab_61`，所有输出与缓存均在 Pick_Anything。
+独立多物体语言对照与复评命令见 [OPEN_VOCAB_PICK.md](OPEN_VOCAB_PICK.md)。
 
 ## 2026-10-14 最新保存权重核对
 

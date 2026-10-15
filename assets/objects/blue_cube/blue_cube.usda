@@ -1,0 +1,60 @@
+#usda 1.0
+(
+    defaultPrim = "blue_cube"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "blue_cube" (
+    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+)
+{
+    float physics:mass = 0.035
+
+    def Scope "Looks"
+    {
+        def Material "Physics" (
+            prepend apiSchemas = ["PhysicsMaterialAPI"]
+        )
+        {
+            float physics:dynamicFriction = 0.65
+            float physics:restitution = 0.02
+            float physics:staticFriction = 0.8
+        }
+
+        def Material "Blue"
+        {
+            token outputs:mdl:surface.connect = </blue_cube/Looks/Blue/MDL.outputs:out>
+            token outputs:surface.connect = </blue_cube/Looks/Blue/Preview.outputs:surface>
+
+            def Shader "Preview"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.1254902, 0.43137255, 0.92156863)
+                float inputs:roughness = 0.6
+                token outputs:surface
+            }
+
+            def Shader "MDL"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                asset inputs:diffuse_texture = @texture/Blue.png@
+                float inputs:reflection_roughness_constant = 0.6
+                token outputs:out
+            }
+        }
+    }
+
+    def Cube "Cube" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        rel material:binding = </blue_cube/Looks/Blue>
+        rel material:binding:physics = </blue_cube/Looks/Physics>
+        double size = 0.05
+        double3 xformOp:translate = (0, 0, 0.025)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}
