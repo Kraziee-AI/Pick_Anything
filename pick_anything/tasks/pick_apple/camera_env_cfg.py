@@ -25,6 +25,7 @@ from pick_anything.robots import SO101_FOLLOWER_CFG
 from pick_anything.tasks.pick_apple import camera_mdp, staged_mdp
 from pick_anything.tasks.pick_apple.pick_env_cfg import PickRLSceneCfg
 from pick_anything.tasks.pick_apple.staged_env_cfg import (
+    PhysicsDREventsCfg,
     StagedObservationsCfg,
     StagedPickAppleEnvCfg,
     StagedRewardsCfg,
@@ -518,3 +519,20 @@ class StagedSmoothTeacherEnvCfg(StagedFineTeacherEnvCfg):
         # super 链末尾已把全表 ×CAMERA_REWARD_SCALE（action_rate 变 -0.000333）；
         # 在其后直接覆盖为有效值 -4.0（定标见类 docstring）
         self.rewards.action_rate.weight = -4.0
+
+
+@configclass
+class StagedSmoothTeacherDRCfg(StagedSmoothTeacherEnvCfg):
+    """v2：v1 + 执行器带逐局随机（gym id: Pick-Apple-SO101-Staged-TeacherFine-v2）。
+
+    Plan B 首站（2026-10-08 立项）：sim2sim 定案 teacher_smooth_v1 是对 Isaac
+    物理常数过拟合的确定性策略（爪峰过门余量 +0.0041 rad，换求解器即混沌
+    分岔，MuJoCo 批量 0/8）。唯一变量 = events 换 PhysicsDREventsCfg
+    （gains/friction startup→reset、区间加宽，见 staged_env_cfg 该类 docstring）。
+    其余（111 维 obs/动作 0.033/0.02/奖励表含 -4.0 action_rate/课程/90s）
+    逐字继承 v1——**obs 契约不变，旧教师导出的对拍仪器全部可复用**。
+    验收：Isaac 确定性 eval 恢复高位后，用 mujoco_sim2sim/run_teacher.py
+    --policy <v2 jit> 批量，成功率 > 0 即 DR 论点实锤。
+    """
+
+    events: PhysicsDREventsCfg = PhysicsDREventsCfg()

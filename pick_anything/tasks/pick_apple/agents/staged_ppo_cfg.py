@@ -86,3 +86,42 @@ class StagedPPORunnerCfg(PresetCfg):
         critic=STAGED_CRITIC_CFG,
         algorithm=STAGED_ALGO_CFG,
     )
+
+
+# --------------------------------------------------------------------- #
+# 细粒度特权教师专用 PPO（TeacherFine-v0 任务）。演化史（2026-10-01）：
+# * v1：staged 默认 tanh 奖励表 → 细粒度远场零梯度，home_born≡0；
+# * v2：粗粒度线的 σ≤0.15+自适应 LR → KL×4 调度饿死（std 钉 0.15、LR
+#   触底、mean_stage 3.0→1.1 崩塌）；
+# * v3：std (0.05,0.3)+固定 LR 1e-4+entropy 0.001 → 回报量级 30× 压垮
+#   critic（Loss/value 500-1000 vs 教程 0.1，cam_v5 复盘同病根），
+#   success 0.32→0.11 下滑；
+# * v4（当前）：与 cam_v6/CameraTutorialEnvCfg 同步——环境侧全表奖励
+#   ×1/30 对齐教程回报量级（~7/局），算法侧直接用 STAGED_ALGO_CFG
+#   （它本就是教程逐参数配方 entropy 0.005/adaptive 3e-4/desired_kl
+#   0.01；此前 adaptive 触底是回报量级问题而非调度本身）。std 钉 0.3
+#   上界在教程日志同样全程存在、无害。actor 仍是 STAGED_ACTOR_CFG 的
+#   MLP（512/256/128 + obs_norm）仅分布参数不同——蒸馏 teacher strict
+#   load 不受影响。粗粒度状态线 StagedPPORunnerCfg 不动。
+# --------------------------------------------------------------------- #
+
+
+@configclass
+class FineTeacherBoundedGaussianCfg(StagedBoundedGaussianCfg):
+    """细粒度教师的 std 钳制：上界放宽到 0.3（教程口径）。"""
+
+    std_range: tuple[float, float] = (0.05, 0.3)
+
+
+@configclass
+class StagedFineTeacherPPORunnerCfg(PresetCfg):
+    default = StagedPPOBaseRunnerCfg().replace(
+        experiment_name="pick_apple_staged_so101",
+        obs_groups={"actor": ["policy"], "critic": ["critic"]},
+        actor=STAGED_ACTOR_CFG.replace(
+            distribution_cfg=FineTeacherBoundedGaussianCfg(init_std=0.2, std_type="log")
+        ),
+        critic=STAGED_CRITIC_CFG,
+        algorithm=STAGED_ALGO_CFG,
+        num_steps_per_env=64,
+    )
