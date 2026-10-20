@@ -1,5 +1,6 @@
 """Validate model resources and execution combinations before starting Isaac."""
 import hashlib
+import math
 from pathlib import Path
 
 
@@ -24,6 +25,11 @@ def sam_path(args):
 
 
 def validate_options(args):
+    if getattr(args, 'live_debug', False):
+        if not 0 <= args.live_debug_port <= 65535:
+            raise ValueError('live-debug-port must be between 0 and 65535')
+        if not math.isfinite(args.live_debug_interval) or args.live_debug_interval <= 0:
+            raise ValueError('live-debug-interval must be positive and finite')
     if args.controller in ('repaired', 'servo') and args.mask_backend != 'dino':
         raise ValueError('repaired/servo controllers require real language detection; GT diagnostics require baseline')
     if args.segmentation_model and args.segmentation_backend != 'sam':

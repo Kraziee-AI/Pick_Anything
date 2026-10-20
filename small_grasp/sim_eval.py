@@ -47,6 +47,10 @@ def main():
     parser.add_argument('--instruction', default='orange')
     parser.add_argument('--viz', choices=['none', 'kit'], default='none')
     parser.add_argument('--record-video', action='store_true', help='Record each trial with a passive overview camera')
+    parser.add_argument('--live-debug', action='store_true', help='Live browser scene / DINO+SAM split screen')
+    parser.add_argument('--live-debug-port', type=int, default=8765)
+    parser.add_argument('--live-debug-device', default='cpu')
+    parser.add_argument('--live-debug-interval', type=float, default=1.)
     parser.add_argument('--video-fps', type=float, default=15.)
     parser.add_argument('--wrist-camera-profile', choices=['legacy', 'open-jaws'], default='legacy')
     parser.add_argument('--network-region', choices=['auto', 'bbox', 'target-mask'], default='auto')
@@ -106,6 +110,8 @@ def main():
         terminal_result = None
         diagnostic_rows = None
         video_recorder = None
+        live_debug = None
+        live_frames = None
 
         def step(self, action):
             result = super().step(action)
@@ -129,6 +135,9 @@ def main():
                                   'force_norm_n': float(magnitude[i, j])} for i, j in pairs]})
             if self.tracking and self.video_recorder is not None:
                 self.video_recorder.after_step()
+            if self.tracking and self.live_debug is not None and self.live_frames is not None:
+                self.live_debug.offer(self.live_frames, self.live_trial, self.live_seed,
+                                      float(self.episode_length_buf[0]) * self.step_dt)
             return result
 
         def _reset_idx(self, env_ids):
@@ -138,6 +147,9 @@ def main():
                 if self.video_recorder is not None:
                     # Capture the terminal physics state before automatic reset.
                     self.video_recorder.after_step(terminal=True)
+                if self.live_debug is not None and self.live_frames is not None:
+                    self.live_debug.offer(self.live_frames, self.live_trial, self.live_seed,
+                                          float(self.episode_length_buf[0]) * self.step_dt, force=True)
                 self.tracking = False
             super()._reset_idx(env_ids)
 
@@ -172,7 +184,7 @@ def main():
         cfg.events.reset_staged.params['forced_stage'] = 0
     else:
         cfg.target_key = language['target_key']
-    if args.record_video:
+    if args.record_video or args.live_debug:
         from isaaclab.sensors import CameraCfg
         from isaaclab_newton.renderers import NewtonWarpRendererCfg
         import isaaclab.sim as sim_utils
@@ -291,6 +303,12 @@ def main():
         return selected, destination, target_centre
 
     try:
+        if args.live_debug:
+            from .live_debug import LiveDebug
+            env.live_debug = LiveDebug(root / 'live_debug', language['grounding_instruction'],
+                                      args.live_debug_port, args.live_debug_device,
+                                      args.segmentation_model, args.live_debug_interval)
+            print('LIVE_DEBUG_URL=' + env.live_debug.url, flush=True)
         for trial in range(args.episodes):
             seed = args.seed + trial
             env.tracking = False
@@ -299,7 +317,7 @@ def main():
             env.seed(seed)
             env.reset()
             env.tracking = True
-            if args.record_video:
+            if args.record_video or args.live_debug:
                 from .video import EpisodeVideo, OBSERVER_EYE, OBSERVER_TARGET
                 observer = env.scene.sensors['recording_camera']
                 origin = tensor(env.scene.env_origins)[0]
@@ -310,6 +328,8 @@ def main():
                     def rgb(camera):
                         return tensor(camera.data.output['rgb'])[0, ..., :3].cpu().numpy().astype(np.uint8)
                     return rgb(observer), rgb(env.scene.sensors['wrist_camera'])
+                env.live_frames, env.live_trial, env.live_seed = video_frames, trial + 1, seed
+            if args.record_video:
                 env.video_recorder = EpisodeVideo(
                     root / 'videos' / f'trial_{trial + 1:02d}_seed{seed}.mp4', video_frames,
                     env.step_dt, trial + 1, args.episodes, seed, args.video_fps)
@@ -363,6 +383,9 @@ def main():
             with (directory / 'inference.log').open('w') as stream:
                 subprocess.run(command, cwd=ROOT.parent, stdout=stream, stderr=subprocess.STDOUT, check=True)
             proposals = json.loads((directory / 'proposals/result.json').read_text())
+            if env.live_debug is not None:
+                env.live_debug.publish_candidates(directory / 'proposals', view / 'intrinsics.json',
+                                                  trial + 1, proposals['candidates'])
             row = {'trial': trial, 'seed': seed, 'inference_seed': args.inference_seed,
                    'width_scale': args.width_scale, 'scene': args.scene, **language,
                    'counts': proposals['counts'], 'grounding': proposals['grounding'], 'success': False,
@@ -386,6 +409,9 @@ def main():
                                          contact_frame=args.contact_frame, collision_check=args.collision_check,
                                          observation_dir=view)
                 row.update(executor.execute(proposals['candidates'], args.scene))
+            if env.live_debug is not None:
+                env.live_debug.publish_candidates(directory / 'proposals', view / 'intrinsics.json',
+                                                  trial + 1, proposals['candidates'], row)
             env.tracking = False
             row['terminal'] = env.terminal_result
             if env.terminal_result:
@@ -426,8 +452,12 @@ def main():
             if env.video_recorder is not None:
                 env.video_recorder.finish()
         finally:
-            env.close()
-            launcher.app.close()
+            try:
+                if env.live_debug is not None:
+                    env.live_debug.close()
+            finally:
+                env.close()
+                launcher.app.close()
 
 
 if __name__ == '__main__':

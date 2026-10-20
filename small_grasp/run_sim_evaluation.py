@@ -40,6 +40,10 @@ def main(argv=None):
     parser.add_argument('--instruction', default='orange')
     parser.add_argument('--viz', choices=['none', 'kit'], default='none')
     parser.add_argument('--record-video', action='store_true')
+    parser.add_argument('--live-debug', action='store_true')
+    parser.add_argument('--live-debug-port', type=int, default=8765)
+    parser.add_argument('--live-debug-device', default='cpu')
+    parser.add_argument('--live-debug-interval', type=float, default=1.)
     parser.add_argument('--video-fps', type=float, default=15.)
     parser.add_argument('--wrist-camera-profile', choices=['legacy', 'open-jaws'], default='legacy')
     parser.add_argument('--network-region', choices=['auto', 'bbox', 'target-mask'], default='auto')
@@ -89,6 +93,8 @@ def main(argv=None):
         'segmentation_model': model_manifest(args), 'capture_only': args.capture_only,
         'diagnostic_contacts': args.diagnostic_contacts,
         'record_video': args.record_video, 'video_fps': args.video_fps,
+        'live_debug': {'enabled': args.live_debug, 'port': args.live_debug_port,
+                       'device': args.live_debug_device, 'interval_s': args.live_debug_interval},
         'wrist_camera_profile': args.wrist_camera_profile,
         'network_region_requested': args.network_region, 'network_region': network_region,
         'candidate_pool_size_requested': args.candidate_pool_size, 'candidate_pool_size': candidate_pool_size,
@@ -116,6 +122,12 @@ def main(argv=None):
             command.append('--diagnostic-contacts')
         if args.record_video:
             command += ['--record-video', '--video-fps', str(args.video_fps)]
+        if args.live_debug:
+            command += ['--live-debug', '--live-debug-port', str(args.live_debug_port),
+                        '--live-debug-device', args.live_debug_device,
+                        '--live-debug-interval', str(args.live_debug_interval)]
+            print('LIVE_DEBUG=' + (f'http://127.0.0.1:{args.live_debug_port} (ready after scene initialization)'
+                  if args.live_debug_port else str(root / scene / 'live_debug/viewer.json')), flush=True)
         print(json.dumps({'command': command, 'log': str(root / f'{scene}.log')}), flush=True)
         try:
             with (root / f'{scene}.log').open('w') as stream:

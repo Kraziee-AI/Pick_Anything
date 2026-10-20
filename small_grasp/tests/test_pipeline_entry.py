@@ -31,10 +31,14 @@ class LanguageEntryTests(unittest.TestCase):
         from small_grasp.pick import main
         output = ROOT / 'outputs/example_only_not_created'
         with patch('sys.argv', ['small_grasp.pick', '--instruction', '抓橘子', '--scene', 'single',
-                               '--viz', 'kit', '--output-dir', str(output)]), \
+                               '--viz', 'kit', '--live-debug', '--live-debug-port', '0',
+                               '--live-debug-interval', '2', '--output-dir', str(output)]), \
              patch('small_grasp.run_sim_evaluation.main') as runner, redirect_stdout(io.StringIO()):
             main()
         argv = runner.call_args.args[0]
+        self.assertIn('--live-debug', argv)
+        self.assertEqual(argv[argv.index('--live-debug-port') + 1], '0')
+        self.assertEqual(argv[argv.index('--live-debug-interval') + 1], '2.0')
         for flag, expected in {'--instruction': '抓橘子', '--mask-backend': 'dino',
                                '--controller': 'repaired', '--grasp-point': 'network',
                                '--contact-frame': 'open', '--viz': 'kit', '--episodes': '1',
@@ -53,6 +57,7 @@ class LanguageEntryTests(unittest.TestCase):
                           '--wrist-camera-profile', 'open-jaws', '--candidate-pool-size', '20',
                           '--width-scale', '1',
                           '--diagnostic-contacts',
+                          '--live-debug', '--live-debug-port', '0', '--live-debug-interval', '2',
                           '--collision-check', 'capsule', '--output-dir', str(output)])
             command = launch.call_args.args[0]
             self.assertEqual(command[command.index('--instruction') + 1], '抓橘子')
@@ -62,6 +67,9 @@ class LanguageEntryTests(unittest.TestCase):
             self.assertEqual(command[command.index('--candidate-pool-size') + 1], '20')
             self.assertEqual(command[command.index('--controller') + 1], 'servo')
             self.assertIn('--diagnostic-contacts', command)
+            self.assertIn('--live-debug', command)
+            self.assertEqual(command[command.index('--live-debug-port') + 1], '0')
+            self.assertEqual(json.loads((output / 'run.json').read_text())['live_debug']['interval_s'], 2.)
             self.assertEqual(command[command.index('--segmentation-backend') + 1], 'sam')
             self.assertEqual(command[command.index('--collision-check') + 1], 'capsule')
             self.assertEqual(json.loads((output / 'run.json').read_text())['seeds'], [100])
@@ -95,6 +103,8 @@ class LanguageEntryTests(unittest.TestCase):
                       ['--candidate-pool-size', '0'],
                       ['--width-scale', 'nan'],
                       ['--width-scale', '0'],
+                      ['--live-debug', '--live-debug-port', '-1'],
+                      ['--live-debug', '--live-debug-interval', 'nan'],
                       ['--collision-check', 'capsule', '--controller', 'baseline'],
                       ['--segmentation-backend', 'sam', '--mask-backend', 'gt'],
                       ['--segmentation-backend', 'sam', '--segmentation-model', str(cache / 'absent_sam')]):

@@ -22,6 +22,10 @@ def main():
                         help='capsule enables experimental sampled whole-arm collision checks')
     parser.add_argument('--viz', choices=['none', 'kit'], default='none')
     parser.add_argument('--record-video', action='store_true')
+    parser.add_argument('--live-debug', action='store_true', help='Local live scene / DINO+SAM split screen')
+    parser.add_argument('--live-debug-port', type=int, default=8765)
+    parser.add_argument('--live-debug-device', default='cpu')
+    parser.add_argument('--live-debug-interval', type=float, default=1.)
     parser.add_argument('--video-fps', type=float, default=15.)
     parser.add_argument('--wrist-camera-profile', choices=['legacy', 'open-jaws'], default='legacy')
     parser.add_argument('--network-region', choices=['auto', 'bbox', 'target-mask'], default='auto')
@@ -52,6 +56,10 @@ def main():
         command += ['--segmentation-model', str(args.segmentation_model.resolve())]
     if args.record_video:
         command += ['--record-video', '--video-fps', str(args.video_fps)]
+    if args.live_debug:
+        command += ['--live-debug', '--live-debug-port', str(args.live_debug_port),
+                    '--live-debug-device', args.live_debug_device,
+                    '--live-debug-interval', str(args.live_debug_interval)]
     evaluate(command)
     print('PICK_OUTPUT=' + str(output.resolve()), flush=True)
 
