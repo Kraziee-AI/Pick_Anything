@@ -11,8 +11,8 @@
 机制（移植自参考项目 evaluation.py 的 wrapper patch 模式）：
 * 任务的 play_mode 已把 reset 的 forced_stage 钉在 0（HOME）——所有 episode
   从桌面完整任务开始，不使用任何中间阶段出生；
-* patch RslRlVecEnvWrapper.step：每个 env 只计第一个 episode，读取终止原
-  因分类（success / timeout / dropped / box / abnormal）与阶段到达统计，
+* 在 ManagerBasedRLEnv._reset_idx 重置前读取终止原因与阶段里程碑；
+  每个 env 只计第一个 episode，RslRlVecEnvWrapper.step 输出最终汇总，
   收满 N 个 episode 后打印 ``PICK_APPLE_EVAL_RESULT=<json>`` 并退出。
 """
 
@@ -40,14 +40,21 @@ def install_episode_counter() -> list[str]:
     PICK_EVAL_SAVE_EVERY=N  每 N 控制步存一张 env_0 的腕摄帧（放大 PNG）
     PICK_EVAL_SAVE_DIR=dir  输出目录（默认 photos/play_frames）
     PICK_EVAL_SAVE_MAX=K    最多存 K 张（默认 400，防止刷盘）
+    PICK_EVAL_RESULT_PATH=path  可选 JSON 汇总路径
     """
+    from isaaclab.envs import ManagerBasedRLEnv
     from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
+    from rsl_rl.runners import OnPolicyRunner
 
     target = EVALUATION_EPISODES
     counts = dict.fromkeys(
         ("episodes", "successes", "grasp", "lift", "over_box", "in_box") + _TERMINATION_KEYS, 0
     )
     counted: torch.Tensor | None = None
+    terminal_stages = dict.fromkeys(
+        ("HOME", "PREGRASP", "GRASP", "LIFT", "STABILIZE", "TRANSPORT", "PLACE", "RELEASE"), 0
+    )
+    maximum_stages = dict.fromkeys(terminal_stages, 0)
 
     save_every = int(os.environ.get("PICK_EVAL_SAVE_EVERY", "0"))
     save_dir = Path(os.environ.get("PICK_EVAL_SAVE_DIR", "photos/play_frames"))
@@ -73,9 +80,34 @@ def install_episode_counter() -> list[str]:
             print(f"[eval-frames] skip: {exc}", flush=True)
 
     original_step = RslRlVecEnvWrapper.step
+    original_reset = ManagerBasedRLEnv._reset_idx
+
+    def counted_reset(self, env_ids):
+        nonlocal counted
+        if self.num_envs != target:
+            raise RuntimeError(f"home-only 评估要求 --num_envs {target}（每环境恰好一局）")
+        if self.cfg.events.reset_staged.params["forced_stage"] != 0:
+            raise ValueError("完整任务评估必须从 HOME 出生；请勿使用 --train_env_cfg。")
+        if counted is None:
+            counted = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
+        ids = ids[(self.episode_length_buf[ids] > 0) & ~counted[ids]]
+        if ids.numel():
+            counted[ids] = True
+            counts["episodes"] += int(ids.numel())
+            for key in _TERMINATION_KEYS:
+                counts[key] += int(self.termination_manager.get_term(key)[ids].sum())
+            counts["successes"] = counts["success"]
+            state = self.staged_pick_state
+            for key, attr in (("grasp", "grasped"), ("lift", "lifted"),
+                              ("over_box", "over_box_latched"), ("in_box", "in_box_latched")):
+                counts[key] += int(getattr(state.progress, attr)[ids].sum())
+            for stage, name in enumerate(terminal_stages):
+                terminal_stages[name] += int((state.progress.stage[ids] == stage).sum())
+                maximum_stages[name] += int((state.max_stage[ids] == stage).sum())
+        return original_reset(self, env_ids)
 
     def counted_step(self, actions):
-        nonlocal counted
         if self.num_envs != target:
             raise RuntimeError(f"home-only 评估要求 --num_envs {target}（每环境恰好一局）")
         result = original_step(self, actions)
@@ -87,30 +119,6 @@ def install_episode_counter() -> list[str]:
             _dump_frame(self.unwrapped, "reset")
         elif save_every > 0 and saved["step"] % save_every == 0:
             _dump_frame(self.unwrapped, "run")
-        if counted is None:
-            counted = torch.zeros_like(dones)
-        done_ids = dones.nonzero(as_tuple=False).squeeze(-1)
-        done_ids = done_ids[~counted[done_ids]]
-        if done_ids.numel() == 0:
-            return result
-        counted[done_ids] = True
-        env = self.unwrapped
-
-        counts["episodes"] += int(done_ids.numel())
-        for key in _TERMINATION_KEYS:
-            try:
-                term = env.termination_manager.get_term(key)[done_ids]
-            except Exception:
-                term = torch.zeros(int(done_ids.numel()), dtype=torch.bool, device=done_ids.device)
-            counts[key] += int(term.sum())
-        counts["successes"] = counts["success"]
-        state = getattr(env, "staged_pick_state", None)
-        if state is not None:
-            counts["grasp"] += int(state.progress.grasped[done_ids].sum())
-            counts["lift"] += int(state.progress.lifted[done_ids].sum())
-            counts["over_box"] += int(state.progress.over_box_latched[done_ids].sum())
-            counts["in_box"] += int(state.progress.in_box_latched[done_ids].sum())
-
         if counts["episodes"] >= target:
             episodes = counts["episodes"]
             summary = {
@@ -125,12 +133,29 @@ def install_episode_counter() -> list[str]:
                 "box_tipped_rate": counts["staged_box_tipped"] / episodes,
                 "abnormal_rate": counts["staged_abnormal_robot"] / episodes,
                 "birth_policy": "forced HOME (complete task)",
+                "seed": self.unwrapped.cfg.seed,
+                "counts": counts.copy(),
+                "terminal_stage_counts": terminal_stages.copy(),
+                "maximum_stage_counts": maximum_stages.copy(),
+                "grasp_semantics": getattr(
+                    self.unwrapped.staged_pick_state.progress, "grasp_semantics", "instantaneous_condition_latch"
+                ),
+                "milestone_semantics": "grasped follows grasp_semantics; other latches use physical conditions; see maximum_stage_counts for stage progression",
             }
+            result_path = os.environ.get("PICK_EVAL_RESULT_PATH")
+            if result_path:
+                path = Path(result_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n")
             print("PICK_APPLE_EVAL_RESULT=" + json.dumps(summary, sort_keys=True), flush=True)
             raise SystemExit(0)
         return result
 
+    ManagerBasedRLEnv._reset_idx = counted_reset
     RslRlVecEnvWrapper.step = counted_step
+    # Evaluation should not replace the checkpoint's existing deployment exports.
+    OnPolicyRunner.export_policy_to_jit = lambda *args, **kwargs: None
+    OnPolicyRunner.export_policy_to_onnx = lambda *args, **kwargs: None
     return sys.argv[1:]
 
 
