@@ -47,6 +47,8 @@ def main(argv=None):
     parser.add_argument('--video-fps', type=float, default=15.)
     parser.add_argument('--wrist-camera-profile', choices=['legacy', 'open-jaws'], default='legacy')
     parser.add_argument('--network-region', choices=['auto', 'bbox', 'target-mask'], default='auto')
+    parser.add_argument('--network-frame', choices=['camera', 'legacy-optical'], default='camera',
+                        help='Experimental model input basis; exported poses stay in the real camera frame')
     parser.add_argument('--candidate-pool-size', type=int,
                         help='NMS pool: defaults to 100 for open-jaws target-mask, otherwise 20')
     args = parser.parse_args(argv)
@@ -69,6 +71,8 @@ def main(argv=None):
     try:
         candidate_pool_size = resolve_candidate_pool_size(args.wrist_camera_profile, network_region, args.candidate_pool_size)
         validate_options(args)
+        from small_grasp.network_frame import frame_metadata
+        network_input_frame = frame_metadata(args.wrist_camera_profile, args.network_frame)
     except ValueError as error:
         parser.error(str(error))
     root = args.output_dir.resolve()
@@ -96,6 +100,7 @@ def main(argv=None):
         'live_debug': {'enabled': args.live_debug, 'port': args.live_debug_port,
                        'device': args.live_debug_device, 'interval_s': args.live_debug_interval},
         'wrist_camera_profile': args.wrist_camera_profile,
+        'network_frame': args.network_frame, 'network_input_frame': network_input_frame,
         'network_region_requested': args.network_region, 'network_region': network_region,
         'candidate_pool_size_requested': args.candidate_pool_size, 'candidate_pool_size': candidate_pool_size,
         'capture_gripper_rad': args.capture_gripper_rad}, indent=2) + '\n')
@@ -111,6 +116,7 @@ def main(argv=None):
                    '--width-scale', str(args.width_scale),
                    '--segmentation-backend', args.segmentation_backend, '--collision-check', args.collision_check,
                    '--wrist-camera-profile', args.wrist_camera_profile, '--network-region', network_region,
+                   '--network-frame', args.network_frame,
                    '--candidate-pool-size', str(candidate_pool_size)]
         if args.segmentation_model:
             command += ['--segmentation-model', str(args.segmentation_model.resolve())]

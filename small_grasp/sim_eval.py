@@ -54,6 +54,8 @@ def main():
     parser.add_argument('--video-fps', type=float, default=15.)
     parser.add_argument('--wrist-camera-profile', choices=['legacy', 'open-jaws'], default='legacy')
     parser.add_argument('--network-region', choices=['auto', 'bbox', 'target-mask'], default='auto')
+    parser.add_argument('--network-frame', choices=['camera', 'legacy-optical'], default='camera',
+                        help='Experimental model input basis; exported poses stay in the real camera frame')
     parser.add_argument('--candidate-pool-size', type=int,
                         help='NMS pool: defaults to 100 for open-jaws target-mask, otherwise 20')
     args = parser.parse_args()
@@ -78,6 +80,8 @@ def main():
     try:
         candidate_pool_size = resolve_candidate_pool_size(args.wrist_camera_profile, network_region, args.candidate_pool_size)
         validate_options(args)
+        from small_grasp.network_frame import frame_metadata
+        network_input_frame = frame_metadata(args.wrist_camera_profile, args.network_frame)
     except ValueError as error:
         parser.error(str(error))
     root = args.output_dir.resolve()
@@ -367,7 +371,9 @@ def main():
                        '--world-from-camera', str(view / 'world_from_camera.json'), '--mask-backend', 'dino',
                        '--instruction', language['grounding_instruction'], '--device', args.device,
                        '--seed', str(args.inference_seed), '--width-scale', str(args.width_scale),
-                       '--network-region', network_region,
+                       '--network-region', network_region, '--network-frame', args.network_frame,
+                       '--wrist-camera-profile', args.wrist_camera_profile,
+                       '--camera-settings', str(view / 'camera_settings.json'),
                        '--candidate-pool-size', str(candidate_pool_size),
                        '--output-dir', str(directory / 'proposals')]
             if args.mask_backend == 'gt' or args.controller in ('repaired', 'servo'):
@@ -393,7 +399,8 @@ def main():
                    'terminal': None, 'command': command}
             row.update(mask_backend=args.mask_backend, closure=args.closure, controller=args.controller,
                        wrist_camera_profile=args.wrist_camera_profile,
-                       network_region=network_region,
+                       network_region=network_region, network_frame=args.network_frame,
+                       network_input_frame=proposals['network_input'],
                        candidate_pool_size=candidate_pool_size,
                        segmentation_backend=args.segmentation_backend, collision_check=args.collision_check,
                        grasp_point=args.grasp_point, contact_frame=args.contact_frame,
@@ -433,7 +440,8 @@ def main():
                       'mask_backend': args.mask_backend, 'closure': args.closure, 'checkpoint_sha256': proposals['checkpoint_sha256'],
                       'controller': args.controller,
                       'wrist_camera_profile': args.wrist_camera_profile,
-                      'network_region': network_region,
+                      'network_region': network_region, 'network_frame': args.network_frame,
+                      'network_input_frame': network_input_frame,
                       'candidate_pool_size': candidate_pool_size,
                       'inference_seed': args.inference_seed,
                       'width_scale': args.width_scale,

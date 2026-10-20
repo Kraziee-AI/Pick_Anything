@@ -25,6 +25,8 @@ def sam_path(args):
 
 
 def validate_options(args):
+    from .network_frame import frame_metadata
+    frame_metadata(getattr(args, 'wrist_camera_profile', None), getattr(args, 'network_frame', 'camera'))
     if getattr(args, 'live_debug', False):
         if not 0 <= args.live_debug_port <= 65535:
             raise ValueError('live-debug-port must be between 0 and 65535')

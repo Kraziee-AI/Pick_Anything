@@ -56,6 +56,12 @@ def parse_args():
     parser.add_argument('--crop-padding', type=int, default=20)
     parser.add_argument('--network-region', choices=['bbox', 'target-mask'], default='bbox',
                         help='Network input only; target association and full-scene collision checks remain enabled')
+    parser.add_argument('--network-frame', choices=['camera', 'legacy-optical'], default='camera',
+                        help='Experimental model input basis; all exported poses remain in the real camera frame')
+    parser.add_argument('--wrist-camera-profile', choices=['legacy', 'open-jaws'],
+                        help='Known capture mount; required for legacy-optical model coordinates')
+    parser.add_argument('--camera-settings', type=Path,
+                        help='Capture camera_settings.json; otherwise use the intrinsics sibling when present')
     parser.add_argument('--collision-threshold', type=float, default=0.01)
     parser.add_argument('--collision-voxel', type=float, default=0.005)
     parser.add_argument('--world-from-camera', type=Path, help='JSON 4x4 T_world_camera; otherwise export camera poses only')
@@ -85,6 +91,8 @@ def parse_args():
     if args.segmentation_model and args.segmentation_backend != 'sam':
         parser.error('--segmentation-model requires --segmentation-backend sam')
     args.instruction = args.instruction or 'externally supplied target mask'
+    if args.network_frame != 'camera' and args.wrist_camera_profile is None:
+        parser.error('--network-frame legacy-optical requires explicit --wrist-camera-profile')
     if not (args.num_points >= 2048 and args.top_k >= 1 and 0 < args.max_width <= 0.075
             and args.max_depth > 0 and args.depth_tolerance > 0 and args.crop_padding >= 0
             and args.collision_threshold > 0 and args.collision_voxel > 0 and args.min_score >= 0
@@ -142,6 +150,20 @@ def run(args):
     from PIL import Image
     from .geometry import backproject, diverse_grasp_indices, load_binary_mask, pose_matrix, target_crop, target_membership, validate_intrinsics, validate_transform
     from .visualize import save_overlay
+    from .network_frame import frame_metadata, grasps_to_camera
+    network_frame = frame_metadata(args.wrist_camera_profile, args.network_frame)
+    network_frame['profile_source'] = 'explicit_cli_declaration' if args.wrist_camera_profile else 'unspecified_identity_only'
+    model_from_camera = np.asarray(network_frame['model_from_camera'])
+    settings_path = args.camera_settings or args.intrinsics.parent / 'camera_settings.json'
+    if args.camera_settings or settings_path.is_file():
+        settings_bytes = settings_path.read_bytes()
+        settings = json.loads(settings_bytes)
+        if args.wrist_camera_profile is not None and settings.get('wrist_camera_profile') != args.wrist_camera_profile:
+            raise ValueError('Capture camera profile disagrees with --wrist-camera-profile')
+        network_frame['capture_settings'] = {'path': str(settings_path.resolve()),
+                                             'sha256': hashlib.sha256(settings_bytes).hexdigest(),
+                                             'wrist_camera_profile': settings.get('wrist_camera_profile')}
+        network_frame['profile_source'] = 'capture_settings_verified_against_cli' if args.wrist_camera_profile else 'capture_settings_identity_only'
     device = torch.device(args.device)
     if device.type == 'cuda' and not torch.cuda.is_available():
         raise RuntimeError('CUDA unavailable; launch on GPU 0 with the isaaclab_61 Conda interpreter')
@@ -188,6 +210,8 @@ def run(args):
     from .geometry import network_input_mask
     crop = network_input_mask(mask, valid, args.network_region, args.crop_padding)
     points = cloud[crop]
+    model_points = points if args.network_frame == 'camera' else (points @ model_from_camera.T).astype(np.float32)
+    sampled_indices = np.empty(0, dtype=np.int64)
     counts = {'scene_points': int(valid.sum()), 'target_pixels': int(mask.sum()), 'network_crop_points': len(points),
               'raw': 0, 'finite_score_width': 0, 'target_filtered': 0, 'collision_free': 0, 'exported': 0}
     digest = hashlib.sha256(args.checkpoint.read_bytes()).hexdigest()
@@ -196,6 +220,7 @@ def run(args):
         raise ValueError('Bundled checkpoint hash mismatch')
     selected = np.zeros((0, 17), dtype=np.float32)
     raw_rows = np.zeros((0, 17), dtype=np.float32)
+    raw_model_rows = np.zeros((0, 17), dtype=np.float32)
     width_metadata = {key: np.empty(0, dtype=np.float32) for key in
                       ('width_unscaled_m', 'width_scale', 'width_preclamp_m')}
     width_metadata['width_saturated'] = np.empty(0, dtype=bool)
@@ -216,8 +241,8 @@ def run(args):
         net.load_state_dict(checkpoint['model_state_dict'], strict=True)
         parameters = sum(parameter.numel() for parameter in net.parameters())
         epoch = checkpoint.get('epoch')
-        indices = rng.choice(len(points), args.num_points, replace=len(points) < args.num_points)
-        sampled = torch.from_numpy(points[indices][None].astype(np.float32)).to(device)
+        sampled_indices = rng.choice(len(points), args.num_points, replace=len(points) < args.num_points)
+        sampled = torch.from_numpy(model_points[sampled_indices][None].astype(np.float32)).to(device)
         if device.type == 'cuda':
             torch.cuda.synchronize(device)
         inference_start = time.perf_counter()
@@ -225,7 +250,8 @@ def run(args):
             output = net({'point_clouds': sampled})
             decoded, decoded_widths = pred_decode(output, width_scale=args.width_scale,
                                                   return_width_metadata=True)
-            raw_rows = decoded[0].cpu().numpy().astype(np.float32, copy=False).reshape(-1, 17)
+            raw_model_rows = decoded[0].cpu().numpy().astype(np.float32, copy=False).reshape(-1, 17)
+            raw_rows = grasps_to_camera(raw_model_rows, model_from_camera)
             width_metadata = {key: value.cpu().numpy() for key, value in decoded_widths[0].items()}
         if device.type == 'cuda':
             torch.cuda.synchronize(device)
@@ -272,6 +298,7 @@ def run(args):
         item = {'candidate_id': f'g{raw_index:06d}', 'raw_index': int(raw_index), 'rank': rank,
                 'overlay_index': rank + 1,
                 'source': {'model': 'graspnet', 'checkpoint_sha256': digest,
+                           'network_frame': args.network_frame, 'wrist_camera_profile': args.wrist_camera_profile,
                            'target_mask': grounding.get('mask_source', str(args.mask) if args.mask else None)},
                 'coordinate_frame': 'camera_optical',
                 'score': float(row[0]), 'score_semantics': 'model_rank_score_not_success_probability',
@@ -293,8 +320,13 @@ def run(args):
     np.savez_compressed(args.output_dir / 'point_clouds.npz',
                         scene_xyz_camera_m=cloud[valid], scene_rgb=rgb_array[valid],
                         target_xyz_camera_m=cloud[valid & mask], target_rgb=rgb_array[valid & mask],
-                        network_crop_xyz_camera_m=points, network_crop_rgb=rgb_array[crop])
+                        network_crop_xyz_camera_m=points, network_crop_rgb=rgb_array[crop],
+                        network_crop_xyz_model_m=model_points,
+                        sampled_network_indices=sampled_indices,
+                        sampled_xyz_model_m=model_points[sampled_indices],
+                        model_from_camera=model_from_camera)
     np.savez_compressed(args.output_dir / 'raw_candidates.npz', grasps=raw_rows,
+                        grasps_model=raw_model_rows,
                         raw_indices=np.arange(len(raw_rows), dtype=np.int64),
                         rejection_reasons=rejection_reasons, **width_metadata)
     np.savez_compressed(args.output_dir / 'filtered_candidates.npz', grasps=filtered_rows,
@@ -319,6 +351,12 @@ def run(args):
               'grounding': grounding, 'counts': counts, 'intrinsics': intrinsics,
               'candidate_pool_size': args.top_k,
               'network_input': {'region': args.network_region, 'points': len(points),
+                                **network_frame,
+                                'point_cloud_provenance': {
+                                    'camera': 'point_clouds.npz:network_crop_xyz_camera_m (registered axial depth, real camera intrinsics)',
+                                    'model': 'point_clouds.npz:network_crop_xyz_model_m (camera crop rotated by model_from_camera)',
+                                    'sample': 'point_clouds.npz:sampled_xyz_model_m (indexed by sampled_network_indices)',
+                                    'raw_predictions': 'raw_candidates.npz:grasps_model (model basis); grasps (real camera basis)'},
                                 'target_points': int((crop & mask).sum()),
                                 'background_points': int((crop & ~mask).sum()),
                                 'collision_input': 'full_scene_valid_depth'},

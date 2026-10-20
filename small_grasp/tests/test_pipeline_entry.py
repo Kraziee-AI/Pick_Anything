@@ -31,11 +31,14 @@ class LanguageEntryTests(unittest.TestCase):
         from small_grasp.pick import main
         output = ROOT / 'outputs/example_only_not_created'
         with patch('sys.argv', ['small_grasp.pick', '--instruction', '抓橘子', '--scene', 'single',
-                               '--viz', 'kit', '--live-debug', '--live-debug-port', '0',
+                               '--viz', 'kit', '--network-frame', 'legacy-optical', '--wrist-camera-profile', 'open-jaws',
+                               '--live-debug', '--live-debug-port', '0',
                                '--live-debug-interval', '2', '--output-dir', str(output)]), \
              patch('small_grasp.run_sim_evaluation.main') as runner, redirect_stdout(io.StringIO()):
             main()
         argv = runner.call_args.args[0]
+        self.assertEqual(argv[argv.index('--network-frame') + 1], 'legacy-optical')
+        self.assertEqual(argv[argv.index('--wrist-camera-profile') + 1], 'open-jaws')
         self.assertIn('--live-debug', argv)
         self.assertEqual(argv[argv.index('--live-debug-port') + 1], '0')
         self.assertEqual(argv[argv.index('--live-debug-interval') + 1], '2.0')
@@ -54,7 +57,7 @@ class LanguageEntryTests(unittest.TestCase):
                 evaluate(['--scenes', 'multi', '--episodes', '1', '--capture-only',
                           '--instruction', '抓橘子', '--seed', '100', '--segmentation-backend', 'sam',
                           '--controller', 'servo', '--inference-seed', '43',
-                          '--wrist-camera-profile', 'open-jaws', '--candidate-pool-size', '20',
+                          '--wrist-camera-profile', 'open-jaws', '--network-frame', 'legacy-optical', '--candidate-pool-size', '20',
                           '--width-scale', '1',
                           '--diagnostic-contacts',
                           '--live-debug', '--live-debug-port', '0', '--live-debug-interval', '2',
@@ -65,6 +68,10 @@ class LanguageEntryTests(unittest.TestCase):
             self.assertEqual(command[command.index('--inference-seed') + 1], '43')
             self.assertEqual(command[command.index('--width-scale') + 1], '1.0')
             self.assertEqual(command[command.index('--candidate-pool-size') + 1], '20')
+            self.assertEqual(command[command.index('--network-frame') + 1], 'legacy-optical')
+            record = json.loads((output / 'run.json').read_text())
+            self.assertEqual(record['network_frame'], 'legacy-optical')
+            self.assertEqual(record['network_input_frame']['wrist_camera_profile'], 'open-jaws')
             self.assertEqual(command[command.index('--controller') + 1], 'servo')
             self.assertIn('--diagnostic-contacts', command)
             self.assertIn('--live-debug', command)
@@ -101,6 +108,7 @@ class LanguageEntryTests(unittest.TestCase):
                       ['--controller', 'servo', '--mask-backend', 'gt'],
                       ['--inference-seed', '-1'],
                       ['--candidate-pool-size', '0'],
+                      ['--network-frame', 'unknown'],
                       ['--width-scale', 'nan'],
                       ['--width-scale', '0'],
                       ['--live-debug', '--live-debug-port', '-1'],

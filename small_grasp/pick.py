@@ -29,6 +29,8 @@ def main():
     parser.add_argument('--video-fps', type=float, default=15.)
     parser.add_argument('--wrist-camera-profile', choices=['legacy', 'open-jaws'], default='legacy')
     parser.add_argument('--network-region', choices=['auto', 'bbox', 'target-mask'], default='auto')
+    parser.add_argument('--network-frame', choices=['camera', 'legacy-optical'], default='camera',
+                        help='Experimental model input basis; exported poses stay in the real camera frame')
     parser.add_argument('--candidate-pool-size', type=int,
                         help='NMS pool: defaults to 100 for open-jaws target-mask, otherwise 20')
     parser.add_argument('--output-dir', type=Path)
@@ -49,7 +51,8 @@ def main():
               '--grasp-point', 'network', '--contact-frame', 'open', '--output-dir', str(output),
               '--segmentation-backend', args.segmentation_backend, '--collision-check', args.collision_check,
               '--evaluation-role', args.evaluation_role,
-              '--wrist-camera-profile', args.wrist_camera_profile, '--network-region', args.network_region]
+              '--wrist-camera-profile', args.wrist_camera_profile, '--network-region', args.network_region,
+              '--network-frame', args.network_frame]
     if args.candidate_pool_size is not None:
         command += ['--candidate-pool-size', str(args.candidate_pool_size)]
     if args.segmentation_model:
