@@ -1,0 +1,100 @@
+#usda 1.0
+(
+    defaultPrim = "cardboard_box"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "cardboard_box" (
+    prepend references = @../../assets/objects/cardboard_box/cardboard_box.usd@
+)
+{
+    def Material "VisibleMaterial"
+    {
+        token outputs:surface.connect = </cardboard_box/VisibleMaterial/Shader.outputs:surface>
+
+        def Shader "Shader"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.55, 0.32, 0.13)
+            float inputs:roughness = 0.85
+            token outputs:surface
+        }
+    }
+
+    def Mesh "Visible_Bottom" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 1
+        float3[] extent = [(-0.08, -0.08, 0), (0.08, 0.08, 0.003)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 3, 7, 6, 2, 0, 4, 7, 3, 1, 2, 6, 5]
+        rel material:binding = </cardboard_box/VisibleMaterial>
+        uniform token orientation = "rightHanded"
+        point3f[] points = [(-0.08, -0.08, 0), (0.08, -0.08, 0), (0.08, 0.08, 0), (-0.08, 0.08, 0), (-0.08, -0.08, 0.003), (0.08, -0.08, 0.003), (0.08, 0.08, 0.003), (-0.08, 0.08, 0.003)]
+        color3f[] primvars:displayColor = [(0.55, 0.32, 0.13)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Mesh "Visible_WallNorth" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 1
+        float3[] extent = [(-0.08, 0.077, 0), (0.08, 0.08, 0.05)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 3, 7, 6, 2, 0, 4, 7, 3, 1, 2, 6, 5]
+        rel material:binding = </cardboard_box/VisibleMaterial>
+        uniform token orientation = "rightHanded"
+        point3f[] points = [(-0.08, 0.077, 0), (0.08, 0.077, 0), (0.08, 0.08, 0), (-0.08, 0.08, 0), (-0.08, 0.077, 0.05), (0.08, 0.077, 0.05), (0.08, 0.08, 0.05), (-0.08, 0.08, 0.05)]
+        color3f[] primvars:displayColor = [(0.55, 0.32, 0.13)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Mesh "Visible_WallSouth" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 1
+        float3[] extent = [(-0.08, -0.08, 0), (0.08, -0.077, 0.05)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 3, 7, 6, 2, 0, 4, 7, 3, 1, 2, 6, 5]
+        rel material:binding = </cardboard_box/VisibleMaterial>
+        uniform token orientation = "rightHanded"
+        point3f[] points = [(-0.08, -0.08, 0), (0.08, -0.08, 0), (0.08, -0.077, 0), (-0.08, -0.077, 0), (-0.08, -0.08, 0.05), (0.08, -0.08, 0.05), (0.08, -0.077, 0.05), (-0.08, -0.077, 0.05)]
+        color3f[] primvars:displayColor = [(0.55, 0.32, 0.13)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Mesh "Visible_WallEast" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 1
+        float3[] extent = [(0.077, -0.077, 0), (0.08, 0.077, 0.05)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 3, 7, 6, 2, 0, 4, 7, 3, 1, 2, 6, 5]
+        rel material:binding = </cardboard_box/VisibleMaterial>
+        uniform token orientation = "rightHanded"
+        point3f[] points = [(0.077, -0.077, 0), (0.08, -0.077, 0), (0.08, 0.077, 0), (0.077, 0.077, 0), (0.077, -0.077, 0.05), (0.08, -0.077, 0.05), (0.08, 0.077, 0.05), (0.077, 0.077, 0.05)]
+        color3f[] primvars:displayColor = [(0.55, 0.32, 0.13)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Mesh "Visible_WallWest" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 1
+        float3[] extent = [(-0.08, -0.077, 0), (-0.077, 0.077, 0.05)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 3, 7, 6, 2, 0, 4, 7, 3, 1, 2, 6, 5]
+        rel material:binding = </cardboard_box/VisibleMaterial>
+        uniform token orientation = "rightHanded"
+        point3f[] points = [(-0.08, -0.077, 0), (-0.077, -0.077, 0), (-0.077, 0.077, 0), (-0.08, 0.077, 0), (-0.08, -0.077, 0.05), (-0.077, -0.077, 0.05), (-0.077, 0.077, 0.05), (-0.08, 0.077, 0.05)]
+        color3f[] primvars:displayColor = [(0.55, 0.32, 0.13)]
+        uniform token subdivisionScheme = "none"
+    }
+}
+

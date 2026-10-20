@@ -1,0 +1,12 @@
+{
+  "repository": "facebook/sam-vit-base",
+  "revision": "70c1a07f894ebb5b307fd9eaaee97b9dfc16068f",
+  "model_sha256": "892c410e496344e527255ccdcb2cb7244a609acb5389c7c4fdba1288f861c579",
+  "source": "https://huggingface.co/facebook/sam-vit-base/tree/70c1a07f894ebb5b307fd9eaaee97b9dfc16068f",
+  "downloaded_files": [
+    "config.json",
+    "preprocessor_config.json",
+    "model.safetensors",
+    "README.md"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "width": 640,
+  "height": 480,
+  "fx": 592.566,
+  "fy": 592.566,
+  "cx": 319.132,
+  "cy": 246.937,
+  "depth_scale": 1000.0,
+  "frame": "camera optical: +X right, +Y down, +Z forward"
+}

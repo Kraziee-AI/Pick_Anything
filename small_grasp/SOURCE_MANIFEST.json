@@ -1,0 +1,72 @@
+{
+  "source": "/home/user123/ViewInvariantSE3/OVGNet_full_repro/graspnet/graspnet",
+  "upstream": "https://github.com/cv516Buaa/OVGNet",
+  "upstream_commit": "caaf6f695895aaca13aa010ec93d32d27e34c049",
+  "files": {
+    "vendor/models/backbone.py": {
+      "source_sha256": "124886240188f5ea3e36a6af81eb2d65659b7346f1e07cedf1c685071eb1de47",
+      "local_sha256": "19bf2fdf9b4ab18954c78701a96c4d0155d3c043dcf561d10b6066bb7c13d1f0"
+    },
+    "vendor/models/modules.py": {
+      "source_sha256": "bbee6998dc08c5d4296aa989fdc7d4bb8aa52a06325aecbe1d74f97228b458f0",
+      "local_sha256": "6c9f77c9fb67a90c2945d5cf498340921b54f0057185fc1c031df4b4882b1f96"
+    },
+    "vendor/models/graspnet.py": {
+      "source_sha256": "29e530b3862beb922b3c22396c09dbad382585b2b14c1e57850b4b5b68ed6cd7",
+      "local_sha256": "1f8a50d60246753b3c583a71d5c29381122c9b5bd589471817e9b4b91670e7b0"
+    },
+    "vendor/pointnet2/pointnet2_modules.py": {
+      "source_sha256": "7c87a7b2fbd2ca31d5e9b7c6734a84b11d00b6b5a2caf1e40162fa84bcc27dea",
+      "local_sha256": "8c0e746873d28536ff7bbc2c06bd4d50c2a4a75f02a68c41e76288088f8ebbba"
+    },
+    "vendor/pointnet2/pointnet2_utils.py": {
+      "source_sha256": "40cc9492a09eeb41d270014b26a9eadd5f9d38749dda9acdffd954821febb115",
+      "local_sha256": "edda9b5f1e52d65e44e1ea5eb64623d9e27bb893b4d100274308536a8ad6d613"
+    },
+    "vendor/pointnet2/pytorch_utils.py": {
+      "source_sha256": "c707663b5b300e9c037b975e9e82c046876d294d5c3fc1d89dd6050b74ac9053",
+      "local_sha256": "c707663b5b300e9c037b975e9e82c046876d294d5c3fc1d89dd6050b74ac9053"
+    },
+    "vendor/utils/loss_utils.py": {
+      "source_sha256": "c6181ff392f59886b3be422880e3aa31acc151d04e68250469669d073c93fa5b",
+      "local_sha256": "6d95f9ee6c9ddf2b666964c94dc835da2f3bfd00893351c1d7d04873cb0c7563"
+    },
+    "vendor/utils/collision_detector.py": {
+      "source_sha256": "c8776ae298e2fa1972e94989074c7227467f37803c02217e950eefb0bae74bc8",
+      "local_sha256": "86da4736bffeb72ff59bccf48c02273505a2af91dbbf995525812f25ee2a6812"
+    },
+    "vendor/LICENSE": {
+      "source_sha256": "acdeaedbed2d5b38b1fdacba406db53743d06a05f4220126bee91a548241f09b",
+      "local_sha256": "a685959614b960ed104bef76a746183c56951aa1126e188e577b0502c3a976ce"
+    },
+    "models/graspnet_epoch18.tar": {
+      "source": "/home/user123/ViewInvariantSE3/OVGNet_full_repro/graspnet/graspnet/logs/log_rs/checkpoint.tar",
+      "sha256": "60680087c61cba2b6791614fef1519071e294f6dcaf99b3f581bb95f7c51a868"
+    },
+    "examples/pear/rgb.png": {
+      "source": "/home/user123/ViewInvariantSE3/vlgrasp_demo/outputs/official_demo/input_rgb.png",
+      "sha256": "374770c7ecc8bc8b197c9b1cb75283fb0ade35da0e8cf97f50cde54e8a60611d"
+    },
+    "examples/pear/depth.png": {
+      "source": "/home/user123/ViewInvariantSE3/vlgrasp_demo/VL-Grasp/example/depth/0003000.png",
+      "sha256": "b9aeca59f8326a176ff76508143d1a0a6ad33dd5bd24dc536dae0e508903a8d5"
+    },
+    "examples/pear/target_mask.png": {
+      "source": "/home/user123/ViewInvariantSE3/vlgrasp_demo/outputs/official_demo/prediction.json",
+      "source_sha256": "1f89306f30db6837340da3ffbe7a5668c2ee500176eab33167902f5e7574991c",
+      "generation": "Rasterized saved RefTR bbox, not segmentation or live language detection",
+      "box_xyxy": [
+        159.5,
+        129.375,
+        248.125,
+        222.0
+      ],
+      "sha256": "6d789f2af95322dc836474483e68e2a1a819a34b560554c571282fccc15c665f"
+    }
+  },
+  "adaptations": [
+    "Relative imports only; remove training-only imports.",
+    "PointNet2 forward kernels use local pure PyTorch operations.",
+    "Architecture, learned tensors and decoder retained."
+  ]
+}

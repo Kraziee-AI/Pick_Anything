@@ -1,0 +1,80 @@
+{
+  "provenance": "v6 development traces; robot FK pose and one RGBD-derived completed-wall point only; no target or box GT",
+  "rows": [
+    {
+      "seed": 320,
+      "step": 445,
+      "pocket": [
+        0.3131308853626251,
+        -0.3807803690433502,
+        0.07150576263666153
+      ],
+      "rotation": [
+        [
+          -0.957103929110224,
+          0.2850799711194034,
+          -0.051782998641749345
+        ],
+        [
+          -0.2099292983026129,
+          -0.8054683430946267,
+          -0.5542115462407556
+        ],
+        [
+          -0.1997041777127957,
+          -0.5195672798964123,
+          0.8307635542469947
+        ]
+      ],
+      "joint_rad": 1.399946928024292,
+      "box_points": [],
+      "expected_old": null,
+      "expected_live": {
+        "reason": "table_mesh",
+        "minimum_mesh_z_m": 0.04064668552409737,
+        "required_vertical_correction_m": 0.00835331447590263
+      }
+    },
+    {
+      "seed": 306,
+      "step": 348,
+      "pocket": [
+        0.3106510639190674,
+        -0.368591845035553,
+        0.09744871407747269
+      ],
+      "rotation": [
+        [
+          -0.7354887059812429,
+          0.6770808193765823,
+          -0.02485814567446959
+        ],
+        [
+          -0.5366667366063904,
+          -0.6045725540468907,
+          -0.5886262317578674
+        ],
+        [
+          -0.4135760839244506,
+          -0.41958740558500524,
+          0.8080230392013339
+        ]
+      ],
+      "joint_rad": 1.3999484777450562,
+      "box_points": [
+        [
+          0.39978441645433127,
+          -0.4272292048592848,
+          0.09029139264932612
+        ]
+      ],
+      "box_point_source": "first matching point in original RGBD points plus observation-derived wall completion, no GT",
+      "expected_old": null,
+      "expected_live": {
+        "reason": "observed_box_mesh",
+        "mesh": "/so101_new_calib/gripper/collisions/camera_mount/Cube/Cube",
+        "body": "fixed"
+      }
+    }
+  ]
+}
