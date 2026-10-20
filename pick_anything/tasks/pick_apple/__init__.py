@@ -16,7 +16,7 @@ gym.register(
 
 gym.register(
     id="Pick-Apple-SO101-Staged-Camera-v8",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point=f"{__name__}.camera_env:CameraPickEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.camera_env_cfg:CameraClosureFinetuneEnvCfg",
@@ -39,7 +39,7 @@ gym.register(
 
 gym.register(
     id="Pick-Apple-SO101-Staged-Camera-Filtered-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point=f"{__name__}.camera_env:CameraPickEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.smooth_camera_cfg:CameraFilteredEnvCfg",
