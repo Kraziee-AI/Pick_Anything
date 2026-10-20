@@ -94,6 +94,7 @@ class CandidateTraceTests(unittest.TestCase):
 
     def test_rejected_empty_orange_mask_accepts_missing_pixel_count(self):
         cache = Path(__file__).resolve().parents[1] / 'cache'
+        cache.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=cache) as directory:
             view = Path(directory)
             mask_path = view / 'target_mask.png'

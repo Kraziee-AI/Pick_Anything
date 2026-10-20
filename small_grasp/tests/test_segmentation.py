@@ -180,6 +180,7 @@ class SegmentationTests(unittest.TestCase):
         metadata = {'detection': {'detected': True, 'box_xyxy': [9., 8., 23., 20.]},
                     'segmentation': {'accepted': True, 'reason': None,
                                      'raw_pixels': int(mask.sum()), 'provenance': 'sam_box_prompt'}}
+        Path('small_grasp/outputs').mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir='small_grasp/outputs') as tmp:
             directory = Path(tmp)
             self.rgb.save(directory / 'rgb.png')

@@ -11,6 +11,7 @@ from small_grasp import summarize_run as summary
 
 class SummaryTests(unittest.TestCase):
     def setUp(self):
+        (summary.ROOT / 'outputs').mkdir(parents=True, exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=summary.ROOT / 'outputs')
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)

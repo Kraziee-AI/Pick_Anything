@@ -153,7 +153,9 @@ class CandidatePoolPlanningTests(unittest.TestCase):
             executor.env.tracking = False
             return False
         executor._step = Mock(side_effect=stop)
-        with tempfile.TemporaryDirectory(dir=str(Path(__file__).resolve().parents[1]/'cache')) as temporary:
+        cache = Path(__file__).resolve().parents[1] / 'cache'
+        cache.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=cache) as temporary:
             executor.directory = Path(temporary)
             result = executor.execute(candidates, 'single')
         executor._plan_servo_openings.assert_called_once()

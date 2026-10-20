@@ -16,6 +16,9 @@ from small_grasp.network_frame import network_from_camera
 
 
 class NetworkFramePipelineTests(unittest.TestCase):
+    def setUp(self):
+        (ROOT / 'cache').mkdir(parents=True, exist_ok=True)
+
     def make_args(self, folder, flags):
         Image.new('RGB', (10, 10), (80, 90, 100)).save(folder / 'rgb.png')
         mask = np.zeros((10, 10), dtype=np.uint8)
