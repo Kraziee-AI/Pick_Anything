@@ -1,0 +1,8 @@
+# Additions to the compatible Isaac Sim 6.1 / Isaac Lab + Newton environment.
+# Install PyTorch and the simulator/backend first; see README.md.
+numpy==2.3.1
+scipy==1.17.0
+Pillow==12.3.0
+transformers==5.10.4
+huggingface-hub>=0.34,<2
+imageio[ffmpeg]>=2.37,<3

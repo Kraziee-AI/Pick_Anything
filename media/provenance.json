@@ -1,0 +1,70 @@
+{
+  "reinforcement_learning": {
+    "route": "camera_ppo",
+    "task": "Pick-Apple-SO101-Staged-Camera-v8",
+    "seed": 42,
+    "checkpoint": "models/camera_ppo/2026-10-12_15-10-13_camera_stage_recovery_v2/model_17596.pt",
+    "checkpoint_sha256": "a984aeb963b61d5ff572f677c47880ac63e28647cec799dcfded426b1f635e35",
+    "original_source_video_sha256": "f5a55b4e5bf7eac6c71062563704e6e7f9da52e5ae2d4e51907139d4c2667849",
+    "source_frames": 110,
+    "source_control_steps": 189,
+    "original_result": {
+      "termination": {
+        "success": true,
+        "time_out": false,
+        "staged_orange_dropped": false,
+        "staged_box_tipped": false,
+        "staged_abnormal_robot": false
+      }
+    },
+    "presentation": "Entire episode, 0.5x simulation speed, labeled on screen. Visual-only tray asset; original physics properties retained. Rendered appearance differs from the unmodified tray.",
+    "benchmark": false
+  },
+  "language_guided": {
+    "target": "orange",
+    "seed": 7000,
+    "source_video": "small_grasp/research/20261020_score_diagnosis/outputs/20261022_reachable_line_formal7000_40/orange_7000/object-single/videos/trial_01_seed7000.mp4",
+    "source_sha256": "cca626db999dc07150bbfbf86819bf51d902e4320f7b23aeafa1084fc3b61fae",
+    "video_sha256": "f2ae90da9c24c3e2bfa287de9faac2ce2701f1f7228d066a65e742b38e021745",
+    "intro_seconds": 8,
+    "intro": "Actual same-run saved DINO, SAM, point cloud and grasp overlays; explicitly labeled static observations.",
+    "execution": "Entire original execution follows without removing frames. Experimental reachable-line policy.",
+    "metric_scope": "Selected successful demonstration; not a benchmark or arbitrary-object claim."
+  },
+  "files": {
+    "language_grasp.mp4": {
+      "bytes": 841045,
+      "sha256": "f2ae90da9c24c3e2bfa287de9faac2ce2701f1f7228d066a65e742b38e021745",
+      "video": {
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "avg_frame_rate": "15/1",
+        "duration": "32.133333",
+        "nb_frames": "482"
+      },
+      "full_decode": "passed"
+    },
+    "language_grasp_preview.jpg": {
+      "bytes": 63988,
+      "sha256": "181a884abee387e6dc99294099247117ebc3ba9caa6d44530f1071960f6de482"
+    },
+    "rl_grasp.mp4": {
+      "bytes": 497294,
+      "sha256": "2795149d616f1ed8b902fa4676201a221f9d9271e9fb9046949f8dad61c6a5d0",
+      "video": {
+        "codec_name": "h264",
+        "width": 1280,
+        "height": 720,
+        "avg_frame_rate": "30/1",
+        "duration": "14.633333",
+        "nb_frames": "439"
+      },
+      "full_decode": "passed"
+    },
+    "rl_grasp_preview.jpg": {
+      "bytes": 65561,
+      "sha256": "d11c41d83dd9deb26b052aa7b4e4513ba756294783e86f46eb5e432938144eb2"
+    }
+  }
+}

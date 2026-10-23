@@ -1,350 +1,297 @@
-# Pick_Anything
+# Pick Anything with SO101
 
-Isaac Sim 仿真环境：桌子 + 桌上物体 + SO101 机械臂。
+Two approaches to tabletop manipulation with the SO101 arm in Isaac Lab:
 
-基于 [LightwheelAI/leisaac](https://github.com/LightwheelAI/leisaac)（Apache-2.0）的资产与参数，
-针对本地 IsaacLab 3.0 / Isaac Sim 6.1 重新实现（leisaac 包本身要求 isaaclab==2.3.0，不可直接安装）。
+- **Reinforcement learning:** train a PPO policy to pick an orange, place it in a tray, and retreat.
+- **Language-guided grasping:** turn a target description and RGB-D observation into a segmented point cloud, ranked 6-DoF grasp proposals, and executable robot motions.
 
-## 环境
+Both approaches run in simulation. The language pipeline is independent of the PPO policies and does not require PPO training.
 
-```bash
-conda activate isaaclab_61
-cd ~/IsaacLab_6.1/Pick_Anything
-export ISAACSIM_ASSET_ROOT="$PWD/assets/isaac_cache"
-export PYTHONDONTWRITEBYTECODE=1
+## Demos
+
+Click a preview to open its MP4. These are demonstration clips, not success-rate benchmarks.
+
+| Reinforcement learning | Language-guided grasping |
+| :---: | :---: |
+| [![PPO grasping demo](media/rl_grasp_preview.jpg)](media/rl_grasp.mp4) | [![Language-guided grasping demo](media/language_grasp_preview.jpg)](media/language_grasp.mp4) |
+| Camera policy: grasp, lift, transport, and place. | GroundingDINO + SAM + GraspNet + SO101 execution. |
+
+## How it works
+
+```mermaid
+flowchart LR
+    L[Target description] --> D[GroundingDINO]
+    RGB[RGB image] --> D
+    D --> S[SAM target mask]
+    RGB --> S
+    S --> P[Target point cloud]
+    Z[Aligned depth + intrinsics] --> P
+    P --> G[GraspNet 6-DoF proposals]
+    G --> F[SO101 IK + limits + collision checks]
+    F --> E[Joint control + grasp execution]
 ```
 
-每个新开的训练、回放或评估终端都先执行上面的环境配置，再启动 Python。
-`ISAACSIM_ASSET_ROOT` 指向项目内的原版 Isaac 资产；同一终端只需设置一次，
-关闭终端或重启电脑后需重新设置。当前脚本不会自动设置这个变量。
-`PYTHONDONTWRITEBYTECODE=1` 用于避免生成 Python 字节码缓存，不影响训练或模型保存。
+GroundingDINO supplies a target region; SAM supplies an instance mask. GraspNet supplies grasp position, orientation, opening width, and score. The controller converts a feasible grasp into joint commands. A 2-D box center is never treated as an executable grasp pose.
 
-### 本地 Isaac 资产缓存
+## Requirements
 
-SO101 SysID 机器人、地面、箭头标记及其 USD／贴图依赖已缓存到
-`assets/isaac_cache/`。首次准备或缓存文件丢失时，在上述 Conda 环境中执行：
+The development setup uses Linux, an NVIDIA GPU, Python 3.12, **Isaac Sim 6.1**, and an **Isaac Lab 3.0 development source checkout with the Newton backend**. It uses Conda and pip.
+
+| Component | Version observed in the development environment |
+| --- | --- |
+| Python | 3.12 |
+| Isaac Sim | 6.1.0.0 |
+| Isaac Lab checkout | `VERSION=3.0.0`, local revision `552e9a6bedd60b996d2f70a2e6f4926fd1eed9b0` |
+| PyTorch / torchvision | 2.11.0+cu128 / 0.26.0+cu128 |
+| Newton | 1.6.0rc1 |
+| RSL-RL | 5.5.1 |
+| Transformers | 5.10.4 |
+
+The Isaac Lab revision identifies the local development setup; its availability from the public upstream repository has not been verified. The project requires `isaaclab_newton` and the unified `isaaclab_rl.entrypoints` API. An older Isaac Lab 2.x installation is not a drop-in replacement. Installed package metadata may differ from the checkout's `VERSION` file.
+
+## Installation
+
+### 1. Create the Conda environment
 
 ```bash
+conda create -n isaaclab_61 python=3.12 -y
+conda activate isaaclab_61
+python -m pip install --upgrade pip
+```
+
+### 2. Install the simulator and a compatible Isaac Lab checkout
+
+Follow the [Isaac Lab installation documentation](https://isaac-sim.github.io/IsaacLab/develop/source/setup/installation/index.html) for driver and platform requirements. Use a checkout supporting Isaac Sim 6.1, Newton, and the unified RL entrypoints above, with all packages in the same Conda environment.
+
+For the pip-based simulator installation:
+
+```bash
+python -m pip install "isaacsim[all,extscache]==6.1.0.0" \
+  --extra-index-url https://pypi.nvidia.com
+```
+
+Set `ISAACLAB_ROOT` to your compatible source checkout. Install its backend dependencies according to its metadata, then its source packages. For the development layout used here:
+
+```bash
+export ISAACLAB_ROOT=/absolute/path/to/IsaacLab
+python -m pip install torch==2.11.0 torchvision==0.26.0 \
+  --index-url https://download.pytorch.org/whl/cu128
+python -m pip install "newton[sim]==1.6.0rc1" rsl-rl-lib==5.5.1
+python -m pip install \
+  -e "$ISAACLAB_ROOT/source/isaaclab" \
+  -e "$ISAACLAB_ROOT/source/isaaclab_assets" \
+  -e "$ISAACLAB_ROOT/source/isaaclab_newton" \
+  -e "$ISAACLAB_ROOT/source/isaaclab_ov" \
+  -e "$ISAACLAB_ROOT/source/isaaclab_physx" \
+  -e "$ISAACLAB_ROOT/source/isaaclab_visualizers" \
+  -e "$ISAACLAB_ROOT/source/isaaclab_rl" \
+  -e "$ISAACLAB_ROOT/source/isaaclab_tasks"
+```
+
+These commands document the source-package layout; a clean-machine installation has not yet been validated. Use the compatible checkout's USD provider and backend dependencies rather than mixing arbitrary USD wheels.
+
+### 3. Set up this repository
+
+```bash
+git clone https://github.com/Kraziee-AI/Pick_Anything.git
+cd Pick_Anything
+python -m pip install -r requirements.txt
+export ISAACSIM_ASSET_ROOT="$PWD/assets/isaac_cache"
+export PYTHONDONTWRITEBYTECODE=1
 python scripts/cache_training_assets.py
 ```
 
-脚本通过 HTTPS 下载原版资产，所有文件都保存在本项目内，并跳过已存在的文件。
-当前缓存包含 22 个文件；缓存完整时无需每次下载，电脑重启后这些文件仍保留。
+Run commands from the repository root. Set the environment variables again in each new terminal. Asset preparation downloads missing original simulator assets into this repository and skips existing files.
 
-此前 Isaac 的资产客户端把下载内容缓存在 `/tmp/https/...`，临时缓存可能在重启后
-被清理。如果启动时报 `Unable to copy file` 或 `Failed to retrieve USD file`，
-先检查本地缓存是否完整，以及当前终端是否设置了 `ISAACSIM_ASSET_ROOT`。
-仅缓存地面不足以启动训练，机器人及其依赖也必须可用。
+### 4. Prepare the language models
 
-## 资产来源（已下载，均在 `assets/`）
-
-| 资产 | 来源 |
-|------|------|
-| `assets/robots/so101_follower.usd` | [leisaac release v0.1.0](https://github.com/LightwheelAI/leisaac/releases/tag/v0.1.0) |
-| `assets/scenes/table_with_cube/` | [leisaac release v0.1.2](https://github.com/LightwheelAI/leisaac/releases/tag/v0.1.2)（已从 scene.usd 中移除 cube） |
-| `assets/objects/apple/`（GraspNet 012）、`orange/`（GraspNet 016） | 本地 GraspNet 简化物体，经 `scripts/convert_graspnet_object.py` 生成 |
-| `assets/objects/cardboard_box/` | 程序化生成的无顶纸盒（16×16×5cm，5 面板），`scripts/make_cardboard_box.py` |
-| `assets/isaac_cache/` | NVIDIA Isaac Sim 6.1 原版 SO101 SysID 机器人、地面、箭头及依赖，`scripts/cache_training_assets.py` 缓存 |
-
-## 运行
+The runtime loads weights **offline**. Download the detector and segmenter once before inference:
 
 ```bash
-# GUI（推荐）
-python scripts/demo_pick_scene.py --visualizer kit
+python - <<'PY'
+from pathlib import Path
+from huggingface_hub import snapshot_download
 
-# 无头冒烟测试
-python scripts/demo_pick_scene.py --steps 1200
-
-# 固定随机种子（复现水果位置）
-python scripts/demo_pick_scene.py --visualizer kit --seed 7
+root = Path.cwd()
+snapshot_download(
+    "IDEA-Research/grounding-dino-tiny",
+    cache_dir=root / "outputs/grounded_pick/cache/huggingface",
+)
+snapshot_download(
+    "facebook/sam-vit-base",
+    revision="70c1a07f894ebb5b307fd9eaaee97b9dfc16068f",
+    local_dir=root / "small_grasp/models/sam-vit-base",
+)
+PY
 ```
 
-demo 中 SO101 的 shoulder_lift/elbow_flex 做缓慢正弦摆动，验证执行器链路。
+Model sources: [GroundingDINO Tiny](https://huggingface.co/IDEA-Research/grounding-dino-tiny), [SAM ViT-B](https://huggingface.co/facebook/sam-vit-base), and [GraspNet baseline](https://github.com/graspnet/graspnet-baseline). The local GraspNet implementation uses PyTorch PointNet2 operations and does not require compiling separate PointNet2 CUDA extensions.
 
-**随机刷位**：每次启动在机械臂可达环扇形区域（基座前方 0.12–0.30m，
-±55°）内随机采样，裁剪到 1.0×0.45m 长方形桌面内；两果间距 ≥10cm，
-水果与纸盒间距 ≥13cm（纸盒完整落在桌内），
-采样逻辑在 `pick_anything/env_cfg.py: sample_object_positions()`。
-苹果、橘子为独立刚体（照片贴图、45mm 夹爪友好尺寸）；
-纸盒为 16×16×5cm 无顶纸皮托盘（独立刚体，每面板独立凸包碰撞，
-盒内可供机械臂放入物体）。
+The expected grasp checkpoint is `small_grasp/models/graspnet_epoch18.tar`, SHA-256:
 
-## 添加更多 GraspNet 物体
-
-```bash
-python scripts/convert_graspnet_object.py --object <编号> --name <名字> --mass <kg>
+```text
+60680087c61cba2b6791614fef1519071e294f6dcaf99b3f581bb95f7c51a868
 ```
 
-编号对应 GraspNet 88 物体（012=苹果、016=橘子、015=梨、013=柠檬…），
-产物在 `assets/objects/<名字>/`（自包含 USD + 贴图）。
+Use this checkpoint for the documented setup. The default path enforces its hash; a different checkpoint can be supplied explicitly to offline inference. SAM and detector caches are excluded from source uploads.
 
-## 三种训练方式与当前版本
+## Reinforcement learning
 
-三种方式都完成「抓橘子 → 放入纸盒 → 撤爪确认」，共用八阶段任务逻辑：
-HOME → PREGRASP → GRASP → LIFT → STABILIZE → TRANSPORT → PLACE → RELEASE。
-任务名里的 Apple 是历史名称，当前 RL 抓取目标是橘子。
+The historical task IDs contain `Apple`; the current staged RL target is an **orange**.
 
-| 训练方式 | 当前任务 ID | 策略输入 | 学习方式 |
-|---|---|---|---|
-| 八阶段坐标 PPO | `Pick-Apple-SO101-Staged-v0` | 111 维状态：物体相对坐标、本体状态、物理里程碑及三帧历史 | actor/critic 使用 PPO 奖励训练，critic 额外读取特权状态 |
-| 纯摄像头 PPO | `Pick-Apple-SO101-Staged-Camera-v8` | 128×96 腕部 RGB + 24 维本体感受 | CNN actor 使用 PPO 奖励训练，critic 读取特权状态；不需要教师 |
-| 教师到摄像头蒸馏 | `Pick-Apple-SO101-Staged-Camera-Distill-v10` | 学生：256×192 RGB + 24 维本体感受；教师：111 维状态 | 固定已训练的坐标 PPO 教师，在线 DAgger + MSE 动作回归训练学生 |
+| Route | Task ID | Actor input |
+| --- | --- | --- |
+| State PPO | `Pick-Apple-SO101-Staged-v0` | State and motion history |
+| Camera PPO | `Pick-Apple-SO101-Staged-Camera-v8` | Wrist RGB and proprioception |
+| Teacher-to-camera distillation | `Pick-Apple-SO101-Staged-Camera-Distill-v10` | Student RGB and proprioception |
 
-摄像头两条路线的学生/actor 不读取物体真实坐标；本体感受包括关节位置、
-速度、目标位置和上一动作。蒸馏时学生执行动作，教师针对学生到达的状态给出
-动作标签；部署时只使用学生。v10 保留教师原始动作标签及学生执行动作，不裁剪至 ±1，
-学生从零初始化，没有再做 PPO 奖励优化。
+Camera PPO uses privileged information in its training critic; its actor uses RGB and proprioception. Distillation requires a compatible trained state teacher and is optional.
 
-`Pick-Apple-SO101-Staged-Camera-Filtered-v0` 是 Camera-v8 模型的已验证平滑
-回放入口：机械臂 EMA 系数 0.7，夹爪保持原动作；它属于摄像头 PPO 路线，
-不是第四种训练方法。早期三级坐标任务和历史摄像头 PPO 实验入口已移除。
-任务版本 `Camera-v8` 与训练实验目录名 `cam_v12` 是不同编号。
-
-### 模型与验收记录
-
-| 用途 | 本地 checkpoint | 说明 |
-|---|---|---|
-| 八阶段坐标 PPO 回放 | `logs/rsl_rl/pick_apple_staged_so101/2026-09-26_16-19-15_retreat_shaping_v2/model_12999.pt` | 已有成功记录的坐标模型，动作尺度 0.06/0.10 |
-| 摄像头 PPO / Filtered 回放 | `logs/rsl_rl/pick_apple_staged_so101_camera/2026-10-07_00-53-39_cam_v12_ft_lowlr/model_13000.pt` | 已验证摄像头模型；Filtered 使用同一份权重 |
-| v10 蒸馏训练的教师 | `logs/rsl_rl/pick_apple_staged_so101/2026-10-05_17-16-17_teacher_smooth_v1/model_2250.pt` | 平滑坐标 PPO 教师，动作尺度 0.033/0.02，与 v10 匹配 |
-
-v10 的配置、动作契约和教师权重严格加载已通过 CPU 检查；本 README 尚无
-v10 学生的完整 HOME 确定性成功率验收记录。教师成绩和混合出生的训练 success
-不能替代学生的完整任务验收。上述 checkpoint 在 Git 忽略的 `logs/` 中，未上传模型权重。
-
-以下命令都在仓库根目录、Conda `isaaclab_61` 环境下运行。`--device cuda:0`
-可按实际 GPU 修改；使用 `CUDA_VISIBLE_DEVICES=1` 时，物理 GPU1 在进程内映射为 `cuda:0`。
-
-### 1. 八阶段坐标 PPO：Staged-v0
-
-从零训练，使用 reset bank 和课程学习：
+### Train PPO
 
 ```bash
-python scripts/train_pick.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-v0 \
-  --num_envs 4096 --device cuda:0 --seed 42 --max_iterations 13000 --viz none \
-  --run_name state_staged_v0
-
+# State policy
 python scripts/train_pick.py --rl_library rsl_rl \
   --task Pick-Apple-SO101-Staged-v0 \
   --num_envs 4096 --device cuda:0 --seed 42 \
-  --max_iterations 13000 --viz none \
-  --experiment_name "$PWD/models/state_ppo" \
-  --run_name retrain
+  --max_iterations 13000 --viz none --run_name state_ppo
+
+# Camera policy
+python scripts/train_pick.py --rl_library rsl_rl \
+  --task Pick-Apple-SO101-Staged-Camera-v8 \
+  --num_envs 512 --device cuda:0 --seed 42 \
+  --max_iterations 12000 --viz none --run_name camera_ppo
 ```
 
-输出目录：`logs/rsl_rl/pick_apple_staged_so101/`。
-actor/critic 为 MLP，学习率 3e-4、自适应 KL 调度；动作尺度 0.06/0.10。
-训练允许从中间阶段出生，回放和验收强制从 HOME 完成全链任务。
+Reduce `--num_envs` for smaller GPUs. Checkpoints and TensorBoard logs are written under `logs/rsl_rl/`. Retain `reset_states/pick_orange_bank_v1.pt`, the reset bank used by staged training.
 
-查看已验证模型：
+Resume a compatible policy by adding `--checkpoint /absolute/path/to/model.pt`. `--max_iterations` specifies the additional iterations for that run.
+
+### Run a trained policy
+
+The archived camera checkpoint is `models/camera_ppo/2026-10-12_15-10-13_camera_stage_recovery_v2/model_17596.pt`.
 
 ```bash
 export LD_PRELOAD="$CONDA_PREFIX/lib/python3.12/site-packages/nvidia/cuda_runtime/lib/libcudart.so.12"
 python scripts/play_pick.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-v0 \
-  --num_envs 4 --device cuda:0 --viz kit \
-  --checkpoint logs/rsl_rl/pick_apple_staged_so101/2026-09-26_16-19-15_retreat_shaping_v2/model_12999.pt
+  --task Pick-Apple-SO101-Staged-Camera-v8 \
+  --num_envs 1 --device cuda:0 --seed 42 --viz kit --real-time \
+  --checkpoint models/camera_ppo/2026-10-12_15-10-13_camera_stage_recovery_v2/model_17596.pt
 ```
 
-### 2. 纯摄像头 PPO：Camera-v8
+State playback uses the state task ID and a matching state checkpoint. Do not interchange state, camera, and distilled checkpoints.
 
-从零训练，使用 128×96 腕部相机、固定出生课程和缩放后的奖励：
+### Record a PPO demonstration
 
-```bash
-python scripts/train_pick.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-Camera-v8 \
-  --num_envs 512 --device cuda:0 --seed 42 --max_iterations 12000 --viz none \
-  --run_name camera_v8
-
-python scripts/train_pick.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-Camera-v8 \
-  --num_envs 512 --device cuda:1 --seed 42 \
-  --max_iterations 13000 --viz none \
-  --experiment_name "$PWD/models/camera_ppo" \
-  --run_name retrain
-```
-
-输出目录：`logs/rsl_rl/pick_apple_staged_so101_camera/`。
-当前 runner 默认固定学习率 1e-4，动作尺度 0.033/0.02，episode 90 秒。
-已验证的 `cam_v12_ft_lowlr` 模型来自低学习率 3e-5 的续训；上面是当前任务的
-从零训练入口，新训练结果仍需验收。
-
-原始动作回放：
+Install the system `ffmpeg` executable, then record one complete episode with a passive overview camera and wrist-camera inset:
 
 ```bash
+PICK_RL_DEMO_OUTPUT="$PWD/outputs/rl_demo/demo.mp4" \
 python scripts/play_pick.py --rl_library rsl_rl \
   --task Pick-Apple-SO101-Staged-Camera-v8 \
-  --num_envs 1 --device cuda:0 --viz kit --real-time \
-  --checkpoint logs/rsl_rl/pick_apple_staged_so101_camera/2026-10-07_00-53-39_cam_v12_ft_lowlr/model_13000.pt
+  --num_envs 1 --device cuda:0 --seed 42 --viz none \
+  --checkpoint models/camera_ppo/2026-10-12_15-10-13_camera_stage_recovery_v2/model_17596.pt \
+  --external_callback scripts.record_rl_demo.install_recorder
 ```
 
-已验证的平滑回放：
+The recorder stops at the first original task termination or 2700 control steps. It reports the original termination reason and does not retry or override policy actions. It adds an observer camera and uses the existing visual-only tray USD so Newton renders the tray; the tray's original physics is referenced unchanged. This is a presentation configuration, not a benchmark. `PICK_RL_DEMO_MAX_STEPS` changes the duration cap. The Newton-camera recorder avoids Kit viewport capture and does not require MoviePy.
 
-```bash
-bash scripts/play_camera_smooth.sh
-```
-
-该脚本使用 `Camera-Filtered-v0`、同一份 `model_13000.pt` 和实时播放，
-保留原有导出模型。滤波发生在动作执行层，不需要修改模型权重。
-详细参数和动作平滑评估见 [CAMERA_PPO_SMOOTHING.md](scripts/CAMERA_PPO_SMOOTHING.md)。
-
-### 重启后恢复纯摄像头 PPO 与掩码 PPO
-
-分别在两个终端执行文首的环境配置，再运行对应的续训命令。
-下面是 2026-10-11 恢复训练的示例；之后续训时，将 `--checkpoint` 换成
-对应训练目录中新保存的检查点，并按计划调整追加轮数。
-
-纯摄像头 PPO：从 `model_7700.pt` 恢复，追加 5300 轮，继续保存到 `models/camera_ppo/`：
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python scripts/train_pick.py \
-  --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-Camera-v8 \
-  --num_envs 512 --device cuda:0 --seed 42 \
-  --max_iterations 5300 --viz none \
-  --experiment_name "$PWD/models/camera_ppo" \
-  --run_name retrain_resume \
-  --checkpoint "$PWD/models/camera_ppo/2026-10-10_17-08-41_retrain_resume/model_7700.pt"
-```
-
-橘子 RGB + GT 掩码 PPO：从 `model_2300.pt` 恢复，追加 11700 轮：
-
-```bash
-CUDA_VISIBLE_DEVICES=2 python scripts/train_grounded_pick.py \
-  --mask-backend gt \
-  --num_envs 512 --device cuda:0 --seed 42 \
-  --max_iterations 11700 --viz none \
-  --run_name orange_gt_v1_resume \
-  --checkpoint "$PWD/logs/rsl_rl/pick_orange_so101_grounded/2026-10-10_17-05-42_orange_gt_v1_resume/model_2300.pt"
-```
-
-`--max_iterations` 是本次追加的轮数，上述命令分别接着训练到约 13000／14000 轮。
-续训会创建新的时间戳目录；掩码权重继续写入 `logs/rsl_rl/pick_orange_so101_grounded/`。
-按实际占用选择不同的物理 GPU；显存不足时可减小 `--num_envs`。
-本地资产配置已通过两种任务各 4 环境、1 轮的检查点加载及 PPO 更新验证。
-掩码路线的训练、回放和评估说明见 [GROUNDED_PICK.md](GROUNDED_PICK.md)。
-
-### 3. 教师到摄像头蒸馏：Camera-Distill-v10
-
-使用已有平滑坐标 PPO 教师训练摄像头学生。这里的 `--checkpoint` 必须指向
-教师模型；不要直接换成尺度 0.06/0.10 的 `model_12999.pt`。
-
-先运行两轮短程检查：
-
-```bash
-python scripts/train_pick.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-Camera-Distill-v10 \
-  --num_envs 32 --device cuda:0 --seed 42 --max_iterations 2 --viz none \
-  --run_name distill_v10_smoke \
-  --checkpoint logs/rsl_rl/pick_apple_staged_so101/2026-10-05_17-16-17_teacher_smooth_v1/model_2250.pt
-
-python scripts/train_pick.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-Camera-Distill-v10 \
-  --num_envs 256 --device cuda:0 --seed 42 \
-  --max_iterations 4000 --viz none \
-  --experiment_name "$PWD/models/camera_distill_v10" \
-  --run_name retrain \
-  --checkpoint logs/rsl_rl/pick_apple_staged_so101/2026-10-05_17-16-17_teacher_smooth_v1/model_2250.pt
-```
-
-正式蒸馏训练：
-
-```bash
-python scripts/train_pick.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-Camera-Distill-v10 \
-  --num_envs 256 --device cuda:0 --seed 42 --max_iterations 4000 --viz none \
-  --run_name distill_v10 \
-  --checkpoint logs/rsl_rl/pick_apple_staged_so101/2026-10-05_17-16-17_teacher_smooth_v1/model_2250.pt
-```
-
-输出目录：`logs/rsl_rl/pick_apple_staged_so101_camera_distill/`。
-标准 RSL-RL `Distillation`，学习率 5e-4，每次 rollout 32 步、4 epochs，
-每 250 轮保存；动作尺度 0.033/0.02、episode 90 秒、八阶段均匀出生。
-
-回放时 `--checkpoint` 改为学生训练输出：
-
-```bash
-python scripts/play_pick.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-Camera-Distill-v10 \
-  --num_envs 1 --device cuda:0 --viz kit --real-time \
-  --checkpoint logs/rsl_rl/pick_apple_staged_so101_camera_distill/<run>/model_XXXX.pt
-```
-
-更多配置说明见 [CAMERA_DISTILL_V10.md](scripts/CAMERA_DISTILL_V10.md)。
-
-### 完整任务确定性评估
-
-三种方式都使用 `scripts/eval_pick_home.py`：每个环境只统计第一个 HOME
-完整 episode，执行策略确定性均值。下面以八阶段坐标 PPO 为例：
+### Evaluate from HOME
 
 ```bash
 python scripts/eval_pick_home.py --rl_library rsl_rl \
-  --task Pick-Apple-SO101-Staged-v0 \
-  --num_envs 256 --device cuda:0 --viz none \
-  --checkpoint logs/rsl_rl/pick_apple_staged_so101/2026-09-26_16-19-15_retreat_shaping_v2/model_12999.pt \
+  --task Pick-Apple-SO101-Staged-Camera-v8 \
+  --num_envs 256 --device cuda:0 --viz none --seed 42 \
+  --checkpoint models/camera_ppo/2026-10-12_15-10-13_camera_stage_recovery_v2/model_17596.pt \
   --external_callback scripts.eval_pick_home.install_episode_counter
 ```
 
-| 评估方式 | `--task` | `--checkpoint` |
-|---|---|---|
-| 坐标 PPO | `Pick-Apple-SO101-Staged-v0` | 坐标 PPO checkpoint |
-| 摄像头 PPO | `Pick-Apple-SO101-Staged-Camera-v8` | 摄像头 PPO checkpoint |
-| 摄像头蒸馏 | `Pick-Apple-SO101-Staged-Camera-Distill-v10` | 蒸馏学生 checkpoint，评估时不加载教师 checkpoint |
+Each environment contributes its first full episode from HOME. A historical camera PPO evaluation recorded **474/512 successes (92.58%)**, across seeds 42 and 43 in the tested simulation distribution. This measures placement and retreat, not arbitrary-object or real-hardware performance.
 
-查看输出 `PICK_APPLE_EVAL_RESULT=` 中的 `success_rate`。
-Filtered 的成功率和动作变化指标使用专门的
-[平滑评估命令](scripts/CAMERA_PPO_SMOOTHING.md#评估与回归检查)。
+## Language-guided grasp inference
 
-### 训练监控与 reset bank 查看
+### Run the SO101 simulation pipeline
 
 ```bash
-tensorboard --logdir logs/rsl_rl --port 6006 --host 127.0.0.1
-python scripts/view_reset_bank.py \
-  --device cuda:0 --visualizer newton --per_stage 15 --steps_per_pose 30
+python -B -m small_grasp.pick \
+  --instruction "orange" --scene object-single --controller servo \
+  --segmentation-backend sam --arm-tracking-feedback \
+  --candidate-contact-ranking --candidate-contact-policy band_first \
+  --wrist-camera-profile open-jaws --network-frame legacy-optical \
+  --network-region target-mask --candidate-pool-size 100 \
+  --record-video --output-dir small_grasp/outputs/orange_demo
 ```
 
-CPU 配置及动作契约检查：
+Use a new output directory each time. Registered `object-single` targets are `orange`, `apple`, `pear`, and `blue cube`. This entrypoint evaluates grasping and end hold, not placement. The older `single` and `multi` physical entrypoints remain orange-specific.
+
+The command explicitly selects evaluated settings; they are not all CLI defaults. `--width-scale 10` is the current compatibility setting, not a calibrated mapping from parallel-gripper width to the SO101 jaw angle.
+
+Add `--close-frame-policy reachable-line` to try experimental robot-feasible closure compensation. It remains opt-in: its new 40-trial evaluation is incomplete, and it has not demonstrated a per-class 70% result.
+
+### View detection, masks, and grasp directions
+
+Add `--live-debug --live-debug-port 8765` to the simulation command, then open `http://127.0.0.1:8765` while it runs. The local viewer shows scene RGB, wrist-camera detection and SAM results, and candidate pose overlays. Perception has processing latency; overlays identify their source frame.
+
+### Infer from your own RGB-D files
 
 ```bash
-python scripts/test_camera_smoothing.py
-python scripts/test_distill_v10.py
+python -B -m small_grasp.infer \
+  --rgb /path/to/rgb.png --depth /path/to/depth.png \
+  --intrinsics /path/to/intrinsics.json \
+  --instruction "yellow pear" --mask-backend dino \
+  --segmentation-backend sam --device cuda:0 \
+  --output-dir small_grasp/outputs/pear_rgbd
 ```
 
-## 结构
+Example intrinsics schema; replace all values with your camera calibration:
 
-```
-pick_anything/
-├── paths.py      # 资产路径常量
-├── robots.py     # SO101_FOLLOWER_CFG（关节名、执行器参数来自 leisaac；自碰撞关闭）
-├── env_cfg.py    # PickSceneCfg：场景 USD 引用 + 机械臂 + 水果/纸盒 + 灯光
-└── tasks/pick_apple/
-    ├── mdp.py            # 共享几何、刷位和状态工具
-    ├── pick_env_cfg.py   # 共享场景与仿真基础配置
-    ├── staged_env_cfg.py # 八阶段动作、观测、奖励、reset 与终止
-    ├── staged_mdp.py     # 八阶段物理状态和奖励实现
-    └── agents/staged_ppo_cfg.py # 坐标 PPO 超参
-scripts/
-├── demo_pick_scene.py
-├── train_pick.py              # 训练入口（注册任务 + isaaclab train CLI）
-├── play_pick.py               # 策略回放入口
-├── convert_graspnet_object.py # GraspNet OBJ → 刚体 USD
-└── make_cardboard_box.py      # 生成无顶纸盒 USD
+```json
+{
+  "width": 640, "height": 480,
+  "fx": 592.566, "fy": 592.566,
+  "cx": 319.132, "cy": 246.937,
+  "depth_scale": 1000.0
+}
 ```
 
-## 坐标约定（沿 leisaac）
+Depth must be aligned with RGB and represent optical-axis Z depth. Use `depth_scale=1000` for integer millimeters or `1` for floating-point meters. The optical frame is +X right, +Y down, +Z forward. Candidate transforms are not SO101 TCP commands; calibrated frame conversion and robot feasibility checks are required.
 
-- 桌面（已改为 1.0×0.45m 长方形）：x ∈ [-0.145, 0.855]，y ∈ [-0.677, -0.227]，顶面 z≈0.041
-- 机器人基座 (0.35, -0.64, 0.01)，从桌子后方伸向桌面，零位夹爪可达 y≈-0.34（0.30m）
-- 关节：shoulder_pan / shoulder_lift / elbow_flex / wrist_flex / wrist_roll / gripper
+This module supports pretrained grasp inference, not GraspNet training. Training a new grasp model requires its upstream dataset and training implementation.
 
-## RGB＋目标掩码抓取
+### Outputs and evaluation scope
 
-掩码路线使用腕摄 RGB、目标矩形掩码及本体状态，可用 GroundingDINO 将语言目标转换为掩码。
-训练、三帧历史、RGB 策略初始化和最新归档权重见 [RGB_MASK_PPO.md](RGB_MASK_PPO.md)，
-基础接口见 [GROUNDED_PICK.md](GROUNDED_PICK.md)。
+Runs save detection metadata, masks, point clouds, candidate IDs and SE(3) poses, overlays, execution traces, and optional MP4 videos. Candidate generation alone is not grasp success. Ground truth is reserved for explicitly separate diagnostics and scoring.
 
-最新归档 `model_2599.pt` 的真实 DINO 小样本评估：单橘子完整抓取放盒 **8/10**，
-10/10 抓起并抬升；多物体场景抓橘子 **0/10**。两套任务成功标准和出生分布不同。
-[逐回合报告](docs/evaluations/2026-10-14_model2599/REPORT.md)和
-[汇总 JSON](docs/evaluations/2026-10-14_model2599/SUMMARY.json)随代码保存。
+The earlier fixed-policy evaluation used ten opportunities per class. Its independent pad-midpoint V2 metric recorded:
+
+| Object | Grasp and lift | End hold |
+| --- | ---: | ---: |
+| Orange | 9/10 | 8/10 |
+| Apple | 9/10 | 8/10 |
+| Pear | 6/10 | 6/10 |
+| Blue cube | 5/10 | 4/10 |
+
+V1 and V2 use different gripper distance references and remain separate. These results use a different task and distribution from PPO; the percentages are not directly comparable. They do not establish arbitrary-object grasping or real-robot readiness.
+
+Checks cover robot limits and sampled gripper-mesh clearance along planned motions. Optional arm-capsule checks remain experimental. This is not a complete all-link or continuous collision planner; held-object and occluded-space coverage remain limited.
+
+## Repository layout
+
+```text
+assets/          Robot, object, scene, and local simulator assets
+pick_anything/   RL tasks, observations, rewards, and registration
+scripts/         Training, playback, evaluation, and asset utilities
+small_grasp/     Grounding, segmentation, grasp inference, and execution
+reset_states/    Reset bank for staged RL training
+models/          Selected archived camera PPO checkpoint
+media/           Homepage videos and preview images
+requirements.txt Project additions to the compatible simulator environment
+```
+
+Experiment outputs, caches, personal notes, and change records are excluded from the public source package. `scripts/prepare_github_release.py` audits and exports a clean snapshot without changing Git's index or deleting local files.
+
+## Acknowledgments and third-party terms
+
+Built on [Isaac Lab](https://github.com/isaac-sim/IsaacLab), [Newton](https://github.com/newton-physics/newton), [RSL-RL](https://github.com/leggedrobotics/rsl_rl), [leisaac](https://github.com/LightwheelAI/leisaac), [GroundingDINO](https://github.com/IDEA-Research/GroundingDINO), [Segment Anything](https://github.com/facebookresearch/segment-anything), and [GraspNet](https://github.com/graspnet/graspnet-baseline). The local grasp implementation was adapted through [OVGNet](https://github.com/cv516Buaa/OVGNet).
+
+Third-party code, assets, and weights retain their own terms. In particular, the GraspNet-derived vendor code carries the noncommercial research terms in `small_grasp/vendor/LICENSE`; this repository does not relicense those components under a blanket permissive license.
