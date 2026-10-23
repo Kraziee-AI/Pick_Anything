@@ -1,0 +1,15 @@
+# Source archives exclude private working notes. This does not rewrite Git history.
+*.md export-ignore
+/README.md -export-ignore
+docs/change_records/ export-ignore
+docs/evaluations/ export-ignore
+.agents/ export-ignore
+.codex/ export-ignore
+.claude/ export-ignore
+.aws/ export-ignore
+small_grasp/research/ export-ignore
+*.mp4 binary
+*.jpg binary
+*.pt binary
+*.tar binary
+*.safetensors binary

@@ -6,3 +6,34 @@ outputs/
 output/
 .claude/settings.local.json
 kitchen_with_orange.zip
+
+# Local agent settings, credentials, notes, and reports.
+.aws/
+.agents/
+.codex/
+.claude/
+**/*.md
+!/README.md
+docs/change_records/
+docs/evaluations/
+question.txt
+imgui.ini
+photos/
+*.bak*
+*.orig
+.env
+.env.*
+
+# Keep only the selected public camera-policy checkpoint.
+models/**
+!models/camera_ppo/
+!models/camera_ppo/2026-10-12_15-10-13_camera_stage_recovery_v2/
+!models/camera_ppo/2026-10-12_15-10-13_camera_stage_recovery_v2/model_17596.pt
+reset_states/*.pt
+!reset_states/pick_orange_bank_v1.pt
+
+# Large model downloads and development experiments stay local.
+small_grasp/models/**
+!small_grasp/models/graspnet_epoch18.tar
+small_grasp/research/
+small_grasp/cache/
