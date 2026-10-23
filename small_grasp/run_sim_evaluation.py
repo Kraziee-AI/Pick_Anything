@@ -16,7 +16,7 @@ if __package__ in (None, ''):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--scenes', nargs='+', choices=['single', 'multi'], default=['single', 'multi'])
+    parser.add_argument('--scenes', nargs='+', choices=['single', 'multi', 'object-single'], default=['single', 'multi'])
     parser.add_argument('--episodes', type=int, default=10)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--inference-seed', type=int, default=42,
@@ -35,6 +35,16 @@ def main(argv=None):
     parser.add_argument('--mask-backend', choices=['dino', 'gt'], default='dino')
     parser.add_argument('--closure', choices=['first_contact', 'full_close'], default='first_contact')
     parser.add_argument('--controller', choices=['baseline', 'repaired', 'servo'], default='repaired')
+    parser.add_argument('--arm-tracking-feedback', action='store_true', help='Experimental bounded robot-joint feedback; requires servo')
+    parser.add_argument('--close-tracking-integral', action='store_true', help='Experimental bounded close-only integral; requires servo arm tracking')
+    parser.add_argument('--close-frame-policy', choices=['fixed-body', 'planned-line', 'reachable-line'], default='fixed-body',
+                        help='Experimental planned-line or whole-path reachable partial line compensation')
+    parser.add_argument('--close-integral-transfer', choices=['reset', 'adjacent'], default='reset',
+                        help='Experimental transfer only between explicitly authorized adjacent preflight close waypoints')
+    parser.add_argument('--closure-latch-policy', choices=['legacy', 'no_reopen'], default='legacy',
+                        help='Experimental no_reopen retains the last issued jaw target at contact stall; requires servo arm tracking')
+    parser.add_argument('--candidate-contact-ranking', action='store_true', help='Experimental observed contact-band preference among feasible plans; requires servo')
+    parser.add_argument('--candidate-contact-policy', choices=['soft8', 'band_first'], default='soft8')
     parser.add_argument('--grasp-point', choices=['network', 'sphere'], default='network')
     parser.add_argument('--contact-frame', choices=['open', 'contact'], default='open')
     parser.add_argument('--instruction', default='orange')
@@ -54,7 +64,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     from small_grasp.instructions import resolve_pick_instruction
     try:
-        language = resolve_pick_instruction(args.instruction)
+        language = resolve_pick_instruction(args.instruction, allow_objects=args.scenes == ['object-single'])
+        if 'object-single' in args.scenes and args.scenes != ['object-single']:
+            raise ValueError('object-single must run separately from legacy single/multi scoring')
     except ValueError as error:
         parser.error(str(error))
     if args.episodes < 1:
@@ -88,10 +100,29 @@ def main(argv=None):
         destination.write_bytes((ROOT / relative).read_bytes())
     assets = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
               for path in (ROOT / 'assets').glob('*.usd*')}
+    object_manifest = None
+    if args.scenes == ['object-single']:
+        from small_grasp.object_registry import get_object_spec, PHYSICS_MATERIAL, NEWTON_CONTACT_FRICTION
+        from small_grasp.object_scoring import SCHEMA, THRESHOLDS
+        spec = get_object_spec(language['target_key'])
+        dependencies = [ROOT / 'object_assets.json', *sorted((ROOT.parent / 'pick_anything').rglob('*.py')),
+                        *sorted(Path(spec['usd_path']).parent.rglob('*'))]
+        object_manifest = {'spec': spec, 'score_schema': SCHEMA, 'score_thresholds': THRESHOLDS,
+            'physics_material': PHYSICS_MATERIAL, 'newton_contact_friction': NEWTON_CONTACT_FRICTION,
+            'files_sha256': {str(p.relative_to(ROOT.parent)): hashlib.sha256(p.read_bytes()).hexdigest()
+                             for p in dependencies if p.is_file()},
+            'role': 'asset metadata and privileged scoring only; center never supplied to grasp control'}
     (root / 'run.json').write_text(json.dumps({'argv': sys.argv, 'source_sha256': sources, 'asset_sha256': assets,
         'runner_arguments': argv if argv is not None else sys.argv[1:], 'language': language, 'viz': args.viz,
         'seeds': list(range(args.seed, args.seed + args.episodes)), 'scenes': args.scenes,
         'inference_seed': args.inference_seed, 'width_scale': args.width_scale, 'controller': args.controller,
+        'arm_tracking_feedback': args.arm_tracking_feedback,
+        'closure_latch_policy': args.closure_latch_policy,
+        'close_tracking_integral': args.close_tracking_integral,
+        'close_integral_transfer': args.close_integral_transfer,
+        'close_frame_policy': args.close_frame_policy,
+        'candidate_contact_ranking': args.candidate_contact_ranking,
+        'candidate_contact_policy': args.candidate_contact_policy,
         'evaluation_role': args.evaluation_role,
         'segmentation_backend': args.segmentation_backend, 'collision_check': args.collision_check,
         'segmentation_model': model_manifest(args), 'capture_only': args.capture_only,
@@ -103,7 +134,8 @@ def main(argv=None):
         'network_frame': args.network_frame, 'network_input_frame': network_input_frame,
         'network_region_requested': args.network_region, 'network_region': network_region,
         'candidate_pool_size_requested': args.candidate_pool_size, 'candidate_pool_size': candidate_pool_size,
-        'capture_gripper_rad': args.capture_gripper_rad}, indent=2) + '\n')
+        'capture_gripper_rad': args.capture_gripper_rad,
+        **({'object_single': object_manifest} if object_manifest else {})}, indent=2) + '\n')
     environment = os.environ.copy()
     environment.update(CUDA_VISIBLE_DEVICES='0', PYTHONDONTWRITEBYTECODE='1', OMP_NUM_THREADS='1')
     for scene in args.scenes:
@@ -120,6 +152,18 @@ def main(argv=None):
                    '--candidate-pool-size', str(candidate_pool_size)]
         if args.segmentation_model:
             command += ['--segmentation-model', str(args.segmentation_model.resolve())]
+        if args.arm_tracking_feedback:
+            command.append('--arm-tracking-feedback')
+        if args.close_tracking_integral:
+            command.append('--close-tracking-integral')
+        if args.close_frame_policy != 'fixed-body':
+            command += ['--close-frame-policy', args.close_frame_policy]
+        if args.close_integral_transfer != 'reset':
+            command += ['--close-integral-transfer', args.close_integral_transfer]
+        if args.closure_latch_policy != 'legacy':
+            command += ['--closure-latch-policy', args.closure_latch_policy]
+        if args.candidate_contact_ranking:
+            command += ['--candidate-contact-ranking', '--candidate-contact-policy', args.candidate_contact_policy]
         if args.capture_only:
             command.append('--capture-only')
         if args.capture_gripper_rad is not None:

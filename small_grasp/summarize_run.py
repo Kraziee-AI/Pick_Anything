@@ -140,7 +140,14 @@ def summarize_row(directory, scene, row, result):
                 collision_evidence=row.get('collision_evidence'),
                 max_held_lift_run_steps=max((sample.get('held_lift_run', 0) for sample in trace), default=0) if trace else None,
                 checkpoint=proposal.get('checkpoint'), checkpoint_sha256=proposal.get('checkpoint_sha256'))
-    if row.get('success') is True and not (row.get('terminal') or {}).get('success'):
+    generic_lift_only = scene == 'object-single' and row.get('score_schema') == 'target_contact_lift_8cm_5steps_v1'
+    if generic_lift_only:
+        stages['task'] = None
+        item.update(score_schema=row['score_schema'], place_evaluated=False, place_success=None,
+                    original_task_success=None,
+                    generic_grasp_lift_success=row.get('generic_grasp_lift_success'),
+                    generic_end_hold_success=row.get('generic_end_hold_success'))
+    elif row.get('success') is True and not (row.get('terminal') or {}).get('success'):
         item['scoring_issue'] = 'task_success_without_terminal_success'
         stages['task'] = None
     # Truth is used only in an explicitly separate post-execution diagnostic.
@@ -214,6 +221,11 @@ def summarize(directory):
                      cohorts={kind: {'episodes': len(subset), 'stages': stage_metrics(subset)}
                               for kind in ('real_language', 'gt_diagnostic', 'unverified_saved_or_unknown')
                               if (subset := [row for row in rows if row['cohort'] == kind])}, rows=rows)
+        if scene == 'object-single':
+            group.update(score_schema=result.get('score_schema'), place_evaluated=False,
+                         original_task_success=None, place_success=None,
+                         generic_grasp_lift_successes=sum(row.get('generic_grasp_lift_success') is True for row in rows),
+                         generic_end_hold_successes=sum(row.get('generic_end_hold_success') is True for row in rows))
         report['groups'][scene] = group
         for row in rows:
             if row.get('checkpoint') and row.get('checkpoint_sha256'):

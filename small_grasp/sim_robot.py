@@ -55,7 +55,10 @@ def _soft_limit_dof_arrays(q_starts, qd_starts, dof_dimensions, coordinates, sof
 
 class _ClosureContactLatch:
     """Latch a jaw target using only measured robot contact and motion."""
-    def __init__(self, nominal_rate_rad_s):
+    def __init__(self, nominal_rate_rad_s, policy='legacy'):
+        if policy not in ('legacy', 'no_reopen'):
+            raise ValueError('Unsupported closure latch policy')
+        self.policy = policy
         self.nominal_rate = abs(float(nominal_rate_rad_s))
         self.consecutive = 0
         self.target = None
@@ -68,15 +71,23 @@ class _ClosureContactLatch:
                      force_n >= SERVO_CONFIG['close_contact_force_n'] and
                      abs(velocity_rad_s) <= SERVO_CONFIG['close_velocity_ratio'] * self.nominal_rate and
                      joint_rad - command_rad > SERVO_CONFIG['close_command_error_rad'])
+        if self.policy == 'no_reopen':
+            qualifies = qualifies and command_rad >= CONFIG['closed_joint_rad']
         self.consecutive = self.consecutive + 1 if qualifies else 0
         if self.consecutive < SERVO_CONFIG['close_contact_consecutive_steps']:
             return None
         self.target = max(CONFIG['closed_joint_rad'], joint_rad - SERVO_CONFIG['hold_preload_rad'])
+        legacy_target = self.target
+        if self.policy == 'no_reopen':
+            # Preserve the already issued closing command. Do not consume any
+            # additional closure, preload, force or actuator budget here.
+            self.target = max(CONFIG['closed_joint_rad'], min(command_rad, self.target))
         return {'event': 'contact_stall_latched', 'claw_force_n': float(force_n),
                 'joint_position_rad': float(joint_rad), 'previous_joint_target_rad': float(command_rad),
                 'joint_velocity_rad_s': float(velocity_rad_s), 'nominal_close_rate_rad_s': self.nominal_rate,
                 'command_error_rad': float(joint_rad - command_rad),
-                'consecutive_contact_steps': self.consecutive, 'locked_joint_target_rad': self.target}
+                'consecutive_contact_steps': self.consecutive, 'locked_joint_target_rad': self.target,
+                'latch_policy': self.policy, 'legacy_joint_target_rad': legacy_target}
 
 
 class _GripperMeshClearance:
@@ -97,7 +108,7 @@ class _GripperMeshClearance:
                 hull = ConvexHull(vertices)
                 self.parts.append((label, name, vertices[hull.vertices], hull.equations))
 
-    def check(self, pocket, rotation, joint_rad):
+    def check(self, pocket, rotation, joint_rad, *, table_buffer_m=0.):
         from .arm_collision import TABLE_XY_BOUNDS, TABLE_Z_M
         rotation, pocket = np.asarray(rotation), np.asarray(pocket)
         points_fixed = (self.box_points - pocket) @ rotation + np.asarray(POCKET)
@@ -105,6 +116,7 @@ class _GripperMeshClearance:
         moving_rotation = g.parent_rotation @ Rotation.from_rotvec(g.axis * joint_rad).as_matrix() @ g.child_rotation.T
         points_moving = (points_fixed - g.parent_pivot) @ moving_rotation + g.child_pivot
         minimum_z = np.inf
+        minimum_evidence = {}
         for label, name, vertices, equations in self.parts:
             vertices_fixed = g.moving_to_fixed(vertices, joint_rad) if label == 'moving' else vertices
             world = (vertices_fixed - POCKET) @ rotation.T + pocket
@@ -112,21 +124,30 @@ class _GripperMeshClearance:
             for axis, (low, high) in enumerate(TABLE_XY_BOUNDS):
                 over_table &= (world[:, axis] >= low) & (world[:, axis] <= high)
             if over_table.any():
-                minimum_z = min(minimum_z, float(world[over_table, 2].min()))
+                selected_world = world[over_table]
+                lowest = selected_world[int(np.argmin(selected_world[:, 2]))]
+                if float(lowest[2]) < minimum_z:
+                    minimum_z = float(lowest[2])
+                    minimum_evidence = {'mesh': str(name), 'body': label,
+                                        'minimum_vertex_world_m': lowest.tolist()}
             local = points_moving if label == 'moving' else points_fixed
             margin = SERVO_CONFIG['mesh_box_margin_m']
             near = local[(local >= vertices.min(0) - margin).all(1) &
                          (local <= vertices.max(0) + margin).all(1)]
             if len(near) and ((near @ equations[:, :3].T + equations[:, 3]) <= margin).all(1).any():
                 return {'reason': 'observed_box_mesh', 'mesh': str(name), 'body': label}
-        if minimum_z < TABLE_Z_M + SERVO_CONFIG['mesh_table_margin_m']:
+        required_margin = SERVO_CONFIG['mesh_table_margin_m'] + table_buffer_m
+        if minimum_z < TABLE_Z_M + required_margin:
             return {'reason': 'table_mesh', 'minimum_mesh_z_m': minimum_z,
-                    'required_vertical_correction_m': TABLE_Z_M + SERVO_CONFIG['mesh_table_margin_m'] - minimum_z}
+                    'required_vertical_correction_m': TABLE_Z_M + required_margin - minimum_z,
+                    'table_top_z_m': TABLE_Z_M, 'table_margin_m': SERVO_CONFIG['mesh_table_margin_m'],
+                    'planning_table_buffer_m': table_buffer_m, 'required_table_margin_m': required_margin,
+                    'surface_clearance_m': minimum_z - TABLE_Z_M, **minimum_evidence}
         return None
 
 
 class GraspExecutor:
-    def __init__(self, env, scorer, directory, closure='first_contact', controller='baseline', destination=None, target_centre=None, contact_frame='open', collision_check='off', observation_dir=None):
+    def __init__(self, env, scorer, directory, closure='first_contact', controller='baseline', destination=None, target_centre=None, contact_frame='open', collision_check='off', observation_dir=None, arm_tracking_feedback=False, candidate_contact_ranking=False, candidate_contact_policy='soft8', closure_latch_policy='legacy', close_tracking_integral=False, close_integral_transfer='reset', close_frame_policy='fixed-body'):
         self.env, self.scorer, self.directory = env, scorer, Path(directory)
         self.robot = env.scene['robot']
         self.device = env.device
@@ -145,6 +166,44 @@ class GraspExecutor:
         self.controller = controller
         if controller not in ('baseline', 'repaired', 'servo'):
             raise ValueError('controller must be baseline, repaired or servo')
+        if arm_tracking_feedback and controller != 'servo':
+            raise ValueError('arm tracking feedback requires the servo controller')
+        self.arm_tracking_feedback = bool(arm_tracking_feedback)
+        if (closure_latch_policy not in ('legacy', 'no_reopen') or
+                (closure_latch_policy != 'legacy' and (controller != 'servo' or not arm_tracking_feedback))):
+            raise ValueError('closure latch policy requires servo arm tracking feedback and a supported policy')
+        self.closure_latch_policy = closure_latch_policy
+        if close_tracking_integral and (controller != 'servo' or not arm_tracking_feedback):
+            raise ValueError('close tracking integral requires servo arm tracking feedback')
+        self.close_tracking_integral = bool(close_tracking_integral)
+        if (close_integral_transfer not in ('reset', 'adjacent') or
+                (close_integral_transfer == 'adjacent' and not close_tracking_integral)):
+            raise ValueError('adjacent integral transfer requires enabled servo close integral')
+        self.close_integral_transfer = close_integral_transfer
+        if (close_frame_policy not in ('fixed-body', 'planned-line', 'reachable-line') or
+                (close_frame_policy in ('planned-line', 'reachable-line') and (controller != 'servo' or not arm_tracking_feedback or
+                 contact_frame != 'open' or close_tracking_integral or close_integral_transfer != 'reset' or
+                 closure_latch_policy != 'legacy'))):
+            raise ValueError('planned-line/reachable-line requires servo tracking, open frame, integral off, reset transfer and legacy latch')
+        self.close_frame_policy = close_frame_policy
+        self._last_closure_rotation = None
+        self._last_closure_tool = None
+        self._reachable_closing_line = None
+        self._pending_close_integral_transfer = None
+        if candidate_contact_ranking and controller != 'servo':
+            raise ValueError('candidate contact ranking requires the servo controller')
+        self.candidate_contact_ranking = bool(candidate_contact_ranking)
+        if candidate_contact_policy not in ('soft8', 'band_first') or (candidate_contact_policy != 'soft8' and not candidate_contact_ranking):
+            raise ValueError('candidate contact policy requires enabled ranking and a supported policy')
+        self.candidate_contact_policy = candidate_contact_policy
+        self.candidate_contact_events = []
+        self.arm_tracking_events = []
+        if self.arm_tracking_feedback:
+            from .arm_tracking import BoundedArmTrackingFeedback
+            self._arm_tracking = BoundedArmTrackingFeedback(self.arm, close_integral=self.close_tracking_integral,
+                integral_transfer=self.close_integral_transfer)
+            self._last_nominal_target = None
+            self._last_issued_target = None
         if controller == 'servo' and target_centre is not None:
             raise ValueError('servo uses the network grasp point; target_centre overrides are unsupported')
         self.motion_goal = None
@@ -242,6 +301,9 @@ class GraspExecutor:
         geometry = getattr(self, 'gripper_geometry', None) or SO101GripperGeometry(
             variants=getattr(self.robot.cfg.spawn, 'variants', None))
         self.mesh_clearance = _GripperMeshClearance(geometry, box_points)
+        if getattr(self, 'arm_tracking_feedback', False):
+            from .closure_envelope import FixedMidpointClosureEnvelope
+            self.closure_envelope = FixedMidpointClosureEnvelope(geometry, self.mesh_clearance.parts)
         self.mesh_state = self.model.state()
         self.mesh_evidence.update(geometry='authored collision submeshes separately convexified',
                                   robot_geometry=geometry.evidence,
@@ -352,7 +414,7 @@ class GraspExecutor:
                 return Path(record['view'])
         raise ValueError('No accepted box observation matches the destination in scan.json')
 
-    def _mesh_at_q(self, q):
+    def _mesh_at_q(self, q, *, table_buffer_m=0.):
         import newton
         import warp as wp
         coordinates = wp.to_torch(self.model.joint_q).cpu().numpy().copy()
@@ -362,17 +424,66 @@ class GraspExecutor:
         newton.eval_fk(self.model, joint_q, self.model.joint_qd, self.mesh_state)
         pose = wp.to_torch(self.mesh_state.body_q)[self.ik_body].cpu().numpy()
         rotation = Rotation.from_quat(pose[3:]).as_matrix()
+        if table_buffer_m:
+            return self.mesh_clearance.check(pose[:3] + rotation @ POCKET, rotation, values[self.grip],
+                                             table_buffer_m=table_buffer_m)
         return self.mesh_clearance.check(pose[:3] + rotation @ POCKET, rotation, values[self.grip])
 
-    def _mesh_path(self, start, end, phase):
+    def _mesh_path(self, start, end, phase, *, table_buffer_m=0.):
         from .arm_collision import joint_samples
         a = start.detach().cpu().numpy().reshape(-1)
         b = end.detach().cpu().numpy().reshape(-1)
         for index, q in enumerate(joint_samples(a, b, self.arm, max_delta=.06)):
-            collision = self._mesh_at_q(q)
+            collision = self._mesh_at_q(q, table_buffer_m=table_buffer_m) if table_buffer_m else self._mesh_at_q(q)
             if collision:
                 return {'phase': phase, 'sample': index, **collision}
         return None
+
+    def _planning_table_buffer(self):
+        from .arm_tracking import PLANNING_TABLE_BUFFER_M
+        return PLANNING_TABLE_BUFFER_M if getattr(self, 'arm_tracking_feedback', False) else 0.
+
+    def _planning_mesh_at_q(self, q):
+        buffer = self._planning_table_buffer()
+        return self._mesh_at_q(q, table_buffer_m=buffer) if buffer else self._mesh_at_q(q)
+
+    def _planning_mesh_path(self, start, end, phase):
+        buffer = self._planning_table_buffer()
+        return self._mesh_path(start, end, phase, table_buffer_m=buffer) if buffer else self._mesh_path(start, end, phase)
+
+    def _planning_closure_envelope(self, point, rotation):
+        """Cheap full-jaw geometry screening before committing a candidate."""
+        from .arm_collision import TABLE_Z_M
+        evidence = self.closure_envelope.minimum(point, rotation, self.open_joint_rad, CONFIG['closed_joint_rad'])
+        margin = SERVO_CONFIG['mesh_table_margin_m'] + self._planning_table_buffer()
+        correction = max(0., TABLE_Z_M + margin - evidence['minimum_mesh_z_m'])
+        evidence.update(required_table_margin_m=margin, planning_table_buffer_m=self._planning_table_buffer(),
+            required_vertical_correction_m=correction, valid=correction == 0.)
+        return evidence
+
+    def _contact_band_diagnostic(self, point, rotation):
+        from .candidate_contact import ContactBandConfig, contact_band_cost, prepare_target_cloud
+        config = ContactBandConfig(enabled=getattr(self, 'candidate_contact_ranking', False),
+                                   policy=getattr(self, 'candidate_contact_policy', 'soft8'))
+        if not config.enabled:
+            return contact_band_cost(None, None, None, None, config=config)
+        if not hasattr(self, '_candidate_target_cloud'):
+            from .geometry import validate_transform
+            self._candidate_target_cloud = None
+            source = self.directory / 'proposals/point_clouds.npz'
+            calibration = self.observation_dir / 'world_from_camera.json'
+            try:
+                transform = validate_transform(json.loads(calibration.read_text()))
+                with np.load(source) as data:
+                    points = np.asarray(data['target_xyz_camera_m'], dtype=float)
+                self._candidate_target_cloud = prepare_target_cloud(points @ transform[:3, :3].T + transform[:3, 3])
+                self._candidate_cloud_source = {'target_cloud': str(source), 'actual_camera_calibration': str(calibration),
+                    'semantics': 'actual target-mask RGB-D points; observed surfaces are not object centers'}
+            except (OSError, ValueError, KeyError) as error:
+                self._candidate_cloud_source = {'error': f'{type(error).__name__}: {error}', 'status': 'missing_target_cloud'}
+        diagnostic = contact_band_cost(self._candidate_target_cloud, point, rotation, self.tool_offset_b, config=config)
+        diagnostic['source'] = self._candidate_cloud_source
+        return diagnostic
 
     def _build_ik(self):
         import warp as wp
@@ -656,6 +767,90 @@ class GraspExecutor:
             'joint_target_rad': decision.target_rad, 'extra_closure_rad': decision.extra_closure_rad})
         return commanded
 
+    def _tracking_command(self, nominal, phase):
+        """Approve bounded feedback through the existing geometric safety gates."""
+        transfer = getattr(self, '_pending_close_integral_transfer', None)
+        self._pending_close_integral_transfer = None
+        if not getattr(self, 'arm_tracking_feedback', False):
+            return nominal
+        q = tensor(self.robot.data.joint_pos)
+        active_phase = phase in ('approach_high', 'approach', 'descend', 'close_align', 'close_centered', 'hold', 'lift', 'lift_hold')
+        # The unmodified nominal command is not a valid fallback from an
+        # already unsafe measured origin. Stop before issuing another action.
+        origin_collision = self._mesh_at_q(q) if active_phase else None
+        nominal_collision = None
+        if active_phase and origin_collision is None:
+            nominal_collision = self._check_path(q, nominal, phase + '_arm_tracking_nominal')
+            if nominal_collision is None:
+                nominal_collision = self._mesh_path(q, nominal, phase + '_arm_tracking_nominal')
+        if origin_collision is not None or nominal_collision is not None:
+            collision = ({'phase': phase + '_arm_tracking_origin', 'sample': 0, **origin_collision}
+                         if origin_collision is not None else nominal_collision)
+            stop_reason = 'origin_collision_stop' if origin_collision is not None else 'nominal_path_collision_stop'
+            self._arm_tracking.reset()
+            self.runtime_collision = collision
+            self.collision_ready = False
+            self.motion_failure = phase + ('_arm_tracking_origin_collision' if origin_collision else '_arm_tracking_nominal_collision')
+            self.mesh_evidence['runtime_stop'] = collision
+            self.arm_tracking_events.append({'step': int(self.env.episode_length_buf[0]), 'phase': phase,
+                'tracking_phase': True, 'accepted': False, 'reason': stop_reason,
+                'collision': collision, 'nominal_joint_target_rad': nominal[0].tolist(),
+                'proposed_joint_target_rad': None, 'applied_joint_target_rad': None,
+                'nominal_minus_actual_arm_rad': (nominal[0, self.arm] - q[0, self.arm]).tolist(),
+                'proposed_arm_bias_rad': [0.] * 5, 'applied_arm_bias_rad': [0.] * 5,
+                'command_issued': False, 'nominal_cache_updated': False})
+            self.trace.append({'phase': phase, 'event': 'runtime_collision_rejected',
+                'step': int(self.env.episode_length_buf[0]), 'command_issued': False,
+                'joint_position': q[0].tolist(), 'nominal_joint_target': nominal[0].tolist(),
+                'collision': collision})
+            return None
+        context = {}
+        if getattr(self, 'close_tracking_integral', False):
+            context = {'phase': phase, 'dt_s': float(self.env.step_dt),
+                       'arm_velocity': tensor(self.robot.data.joint_vel)[0, self.arm].cpu().numpy(),
+                       'integral_transfer': transfer}
+        decision = self._arm_tracking.propose(nominal[0].detach().cpu().numpy(),
+            q[0].detach().cpu().numpy(), tensor(self.robot.data.soft_joint_pos_limits)[0].cpu().numpy(),
+            tracking=active_phase, **context)
+        command = nominal.new_tensor(decision.command)[None]
+        collision = None
+        accepted = decision.reason == 'feedback_proposed'
+        if accepted and decision.active:
+            collision = self._check_path(q, command, phase + '_arm_tracking')
+            if collision is None:
+                collision = self._mesh_path(q, command, phase + '_arm_tracking')
+            accepted = collision is None
+        self._arm_tracking.commit(decision, accepted)
+        # Only the close phase can add I. Elsewhere keep the original safe
+        # nominal fallback, already approved by the origin and nominal gates.
+        integral_stop = (getattr(self, 'close_tracking_integral', False) and
+                         phase == 'close_centered' and not accepted)
+        self.arm_tracking_events.append({'step': int(self.env.episode_length_buf[0]), 'phase': phase,
+            'tracking_phase': active_phase, 'accepted': accepted,
+            'reason': ('collision_rejected' if collision else decision.reason), 'collision': collision,
+            'nominal_joint_target_rad': decision.nominal.tolist(),
+            'proposed_joint_target_rad': decision.command.tolist(),
+            'applied_joint_target_rad': None if integral_stop else (decision.command if accepted else decision.nominal).tolist(),
+            'nominal_minus_actual_arm_rad': decision.error.tolist(),
+            'proposed_arm_bias_rad': decision.bias.tolist(),
+            'applied_arm_bias_rad': (decision.bias if accepted else np.zeros(5)).tolist(),
+            'nominal_cache_updated': False,
+            'close_tracking_integral': {'enabled': getattr(self, 'close_tracking_integral', False),
+                'reason': decision.integral_reason, 'stationary_nominal_steps': decision.stationary_steps,
+                'proposed_integral_rad': decision.integral.tolist() if decision.integral is not None else [0.] * 5,
+                'committed_integral_rad': self._arm_tracking.integral.tolist(),
+                'transfer_used': decision.integral_transfer_used,
+                'transfer_context': ({'session': transfer.session, 'from_index': transfer.from_index,
+                                      'to_index': transfer.to_index} if transfer is not None else None)},
+            **({'command_issued': False} if integral_stop else {})})
+        if integral_stop:
+            self.motion_failure = phase + '_close_tracking_integral_rejected'
+            self.collision_ready = False
+            self.runtime_collision = collision or {'reason': decision.reason}
+            self.mesh_evidence['runtime_stop'] = self.runtime_collision
+            return None
+        return command if accepted else nominal
+
     def _step(self, target, phase):
         if not self.env.tracking or not self.collision_ready:
             self._stop_grasp_hold(phase, 'execution_unavailable')
@@ -674,6 +869,11 @@ class GraspExecutor:
                                    'collision': collision})
                 self._stop_grasp_hold(phase, 'runtime_collision_rejected')
                 return False
+        nominal_target = target
+        target = self._tracking_command(nominal_target, phase)
+        if target is None:
+            self._stop_grasp_hold(phase, 'arm_tracking_origin_collision')
+            return False
         action = torch.zeros((1, 6), device=self.device)
         # Standalone instance uses absolute JointPositionActionCfg(scale=1).
         action[:, :5] = target[:, self.arm]
@@ -683,6 +883,14 @@ class GraspExecutor:
         except BaseException:
             self._stop_grasp_hold(phase, 'step_exception')
             raise
+        if getattr(self, 'arm_tracking_feedback', False):
+            # Nominal and issued targets are distinct: inheriting the biased
+            # issued command would apply the feedback offset a second time.
+            # Only a successfully issued step may advance either cache.
+            self._last_nominal_target = nominal_target.detach().clone()
+            self._last_issued_target = target.detach().clone()
+            if self.arm_tracking_events:
+                self.arm_tracking_events[-1]['nominal_cache_updated'] = True
         self.executed = True
         if self.env.tracking:
             sample = self.scorer()
@@ -700,6 +908,10 @@ class GraspExecutor:
                          'control_tool_reference': self.tool_evidence['control_reference'],
                          'body_rotation_world': self._body_rotation().tolist(),
                          'joint_velocity_rad_s': tensor(self.robot.data.joint_vel)[0].tolist()}
+                reachable_line = getattr(self, '_reachable_closing_line', None)
+                if reachable_line is not None:
+                    extra['reachable_line_observation'] = reachable_line.observed_residual(
+                        body_rotation, float(tensor(self.robot.data.joint_pos)[0, self.grip]))
                 if self.motion_goal is not None:
                     goal_position, goal_rotation = self.motion_goal
                     extra.update(requested_pocket_world_m=np.asarray(goal_position).tolist(),
@@ -707,6 +919,9 @@ class GraspExecutor:
                                  pocket_tracking_error_m=float(np.linalg.norm(pocket - goal_position)),
                                  orientation_tracking_error_deg=float(np.rad2deg(Rotation.from_matrix(
                                      np.asarray(goal_rotation).T @ self._body_rotation()).magnitude())))
+            if getattr(self, 'arm_tracking_feedback', False):
+                extra.update(nominal_joint_target=nominal_target[0].tolist(),
+                             arm_tracking_bias_rad=self._arm_tracking.bias.tolist(), nominal_cache_updated=True)
             self.trace.append({'phase': phase, 'step': int(self.env.episode_length_buf[0]), 'rise_m': rise,
                                'held_lift_run': self.hold_run,
                                'joint_position': tensor(self.robot.data.joint_pos)[0].tolist(),
@@ -718,7 +933,22 @@ class GraspExecutor:
 
     def _move(self, target, phase, steps=60, start=None):
         caller_start = start is not None
-        start = tensor(self.robot.data.joint_pos).clone() if start is None else start.clone()
+        cached = getattr(self, '_last_nominal_target', None) if getattr(self, 'arm_tracking_feedback', False) else None
+        if start is None and cached is not None:
+            start = cached.clone()
+            start_source = 'last_issued_nominal'
+        else:
+            start = tensor(self.robot.data.joint_pos).clone() if start is None else start.clone()
+            start_source = 'explicit_caller' if caller_start else 'measured_bootstrap'
+        if getattr(self, 'arm_tracking_feedback', False):
+            measured = tensor(self.robot.data.joint_pos).clone()
+            issued = getattr(self, '_last_issued_target', None)
+            self.motion_diagnostics.append({'phase': 'motion_start', 'event': 'nominal_move_start',
+                'motion_phase': phase, 'start_source': start_source, 'move_steps': steps,
+                'interpolation_start_rad': start[0].tolist(), 'measured_joint_position_rad': measured[0].tolist(),
+                'last_issued_nominal_rad': cached[0].tolist() if cached is not None else None,
+                'last_issued_command_rad': issued[0].tolist() if issued is not None else None,
+                'start_minus_measured_rad': (start - measured)[0].tolist()})
         if (self.controller == 'servo' and SERVO_CONFIG['lift_fixed_jaw_target_enabled'] and
                 phase in ('lift', 'lift_hold')):
             # The goal already carries the issued close/hold jaw command.
@@ -762,7 +992,9 @@ class GraspExecutor:
             position_error = float(np.linalg.norm(pocket - point))
             angle = float(np.rad2deg(Rotation.from_matrix(np.asarray(rotation).T @ self._body_rotation()).magnitude()))
             arm_error = float((tensor(self.robot.data.joint_pos)[:, self.arm] - target[:, self.arm]).abs().max())
-            arm_speed = float(tensor(self.robot.data.joint_vel)[:, self.arm].abs().max()) if phase == 'approach' and self.controller == 'servo' else None
+            measure_speed = (phase == 'approach' and self.controller == 'servo') or (
+                getattr(self, 'arm_tracking_feedback', False) and phase in ('descend', 'close_align'))
+            arm_speed = float(tensor(self.robot.data.joint_vel)[:, self.arm].abs().max()) if measure_speed else None
             arrived = (position_error <= SERVO_CONFIG['position_tolerance_m'] and
                        angle <= SERVO_CONFIG['orientation_tolerance_deg'] and
                        arm_error <= SERVO_CONFIG['arm_joint_tolerance_rad'])
@@ -811,7 +1043,7 @@ class GraspExecutor:
                 return None, log
             collision = self._check_path(seed, q, phase)
             if collision is None and self.controller == 'servo':
-                collision = self._mesh_path(seed, q, phase)
+                collision = self._planning_mesh_path(seed, q, phase)
             if collision:
                 log['collision'] = collision
                 log['failure_reason'] = 'descend_cartesian_collision'
@@ -834,7 +1066,7 @@ class GraspExecutor:
             path = prepared
             collision = self._check_path(current, path[0][1], 'descend_connect')
             if collision is None and self.controller == 'servo':
-                collision = self._mesh_path(current, path[0][1], 'descend_connect')
+                collision = self._planning_mesh_path(current, path[0][1], 'descend_connect')
             connector_delta = float((current[:, self.arm] - path[0][1][:, self.arm]).abs().max())
             log = {'phase': 'descend_prepared', 'waypoint_count': len(path),
                    'connector_max_arm_delta_rad': connector_delta, 'collision': collision}
@@ -842,12 +1074,22 @@ class GraspExecutor:
             if collision or connector_delta > SERVO_CONFIG['cartesian_max_joint_delta_rad']:
                 self.motion_failure = 'descend_connector_collision' if collision else 'descend_connector_joint_jump'
                 return False
-        command_start = current
+        cached = getattr(self, '_last_nominal_target', None) if getattr(self, 'arm_tracking_feedback', False) else None
+        command_start = cached.clone() if cached is not None else current
+        if getattr(self, 'arm_tracking_feedback', False):
+            self.motion_diagnostics.append({'phase': 'descend_connector', 'event': 'nominal_connector_start',
+                'start_source': 'last_issued_nominal' if cached is not None else 'measured_bootstrap',
+                'interpolation_start_rad': command_start[0].tolist(),
+                'measured_joint_position_rad': current[0].tolist(),
+                'start_minus_measured_rad': (command_start - current)[0].tolist()})
         for desired, q in path:
             self.motion_goal = (desired, rotation)
             if not self._move(q, 'descend', SERVO_CONFIG['cartesian_steps_per_waypoint'], start=command_start):
                 return False
             command_start = q
+            if getattr(self, 'arm_tracking_feedback', False):
+                if not self._arrive(q, desired, rotation, 'descend'):
+                    return False
         # The final joint target belongs to the continuous seed path rather than
         # the independent candidate solve; measure arrival against that target.
         return self._arrive(path[-1][1], point, rotation, 'descend')
@@ -891,6 +1133,19 @@ class GraspExecutor:
     def _body_rotation(self):
         return Rotation.from_quat(tensor(self.robot.data.body_quat_w)[0, self.body].cpu().numpy()).as_matrix()
 
+    def _closure_rotation(self, planned_rotation):
+        """Keep measured tracking error out of the next nominal pose target."""
+        actual = self._body_rotation()
+        if not getattr(self, 'arm_tracking_feedback', False):
+            return actual
+        planned = np.array(planned_rotation, dtype=float, copy=True)
+        self.motion_diagnostics.append({'phase': 'closure_orientation',
+            'event': 'planned_achieved_rotation_preserved',
+            'nominal_rotation_world': planned.tolist(), 'measured_rotation_world': actual.tolist(),
+            'measured_orientation_error_deg': float(np.degrees(Rotation.from_matrix(planned.T @ actual).magnitude())),
+            'source': 'selected candidate achieved body rotation used for descent; measured pose is diagnostic only'})
+        return planned
+
     def _plan_repaired(self, candidates, axes, *, candidate_start=0, candidate_stop=None):
         """Prefer reachable orientation and check both actual open pad heights."""
         from isaaclab.utils.math import quat_apply_inverse
@@ -902,6 +1157,7 @@ class GraspExecutor:
         fixed_b = np.array([-.01289, -.00022, -.0986])
         moving_b = midpoint_b * 2 - fixed_b
         plans = []
+        contact_priorities = {}
         start_q = tensor(self.robot.data.joint_pos).clone()
         stop = min(len(candidates), CONFIG['max_candidates']) if candidate_stop is None else min(len(candidates), candidate_stop)
         for index in range(candidate_start, stop):
@@ -960,7 +1216,9 @@ class GraspExecutor:
                     entry['network_pocket_world_m'] = point.tolist()
                     grasp_q[:, self.grip] = self.open_joint_rad
                     pre_q[:, self.grip] = self.open_joint_rad
-                    collision = self._mesh_at_q(grasp_q)
+                    entry['planning_table_buffer_m'] = self._planning_table_buffer()
+                    entry['required_table_margin_m'] = SERVO_CONFIG['mesh_table_margin_m'] + self._planning_table_buffer()
+                    collision = self._planning_mesh_at_q(grasp_q)
                     correction = collision.get('required_vertical_correction_m', 0.) if collision else 0.
                     if collision and collision['reason'] == 'table_mesh' and correction <= SERVO_CONFIG['mesh_max_vertical_correction_m']:
                         # A finite explicit adaptation of the network endpoint,
@@ -977,12 +1235,40 @@ class GraspExecutor:
                         pre_q[:, self.grip] = self.open_joint_rad
                         point_for_plan = shifted
                         achieved = np.asarray(gd['achieved_rotation'])
-                        collision = self._mesh_at_q(grasp_q)
+                        collision = self._planning_mesh_at_q(grasp_q)
                     entry['mesh_grasp_collision'] = collision
                     entry['executed_pocket_offset_m'] = (point_for_plan - point).tolist()
                     if collision:
                         entry['rejected'] = collision['reason']
                         continue
+                    if getattr(self, 'arm_tracking_feedback', False):
+                        envelope = self._planning_closure_envelope(point_for_plan, achieved)
+                        entry['closure_envelope_before_correction'] = envelope
+                        if not envelope['valid']:
+                            total = float(point_for_plan[2] - point[2] + envelope['required_vertical_correction_m'] + .0001)
+                            if total > SERVO_CONFIG['mesh_max_vertical_correction_m']:
+                                entry.update(rejected='closure_envelope_vertical_correction_exceeds_limit',
+                                    required_total_vertical_correction_m=total)
+                                continue
+                            shifted = point + [0, 0, total]
+                            grasp_q, gd = self._solve(shifted, rotation, grasp_q)
+                            pre_q, pd = self._solve(prepoint + [0, 0, total], rotation, grasp_q) if grasp_q is not None else (None, {})
+                            entry.update(grasp=gd, pregrasp=pd, closure_envelope_vertical_correction_m=total)
+                            if grasp_q is None or pre_q is None:
+                                entry['rejected'] = 'closure_envelope_correction_ik'
+                                continue
+                            grasp_q[:, self.grip] = self.open_joint_rad
+                            pre_q[:, self.grip] = self.open_joint_rad
+                            point_for_plan = shifted
+                            achieved = np.asarray(gd['achieved_rotation'])
+                            collision = self._planning_mesh_at_q(grasp_q)
+                            envelope = self._planning_closure_envelope(point_for_plan, achieved)
+                            entry.update(mesh_grasp_collision=collision,
+                                executed_pocket_offset_m=(point_for_plan - point).tolist())
+                        entry['closure_envelope'] = envelope
+                        if collision or not envelope['valid']:
+                            entry['rejected'] = 'closure_envelope_clearance_after_ik'
+                            continue
                     highpoint = point_for_plan - pose[:3, 0] * CONFIG['pregrasp_distance_m']
                     highpoint[2] = max(highpoint[2], SERVO_CONFIG['approach_clearance_z_m'])
                     high_q, high_diagnostic = self._solve(highpoint, achieved, pre_q)
@@ -991,9 +1277,9 @@ class GraspExecutor:
                         entry['rejected'] = 'high_approach_ik'
                         continue
                     high_q[:, self.grip] = self.open_joint_rad
-                    collision = self._mesh_path(start_q, high_q, 'approach_high')
+                    collision = self._planning_mesh_path(start_q, high_q, 'approach_high')
                     if collision is None:
-                        collision = self._mesh_path(high_q, pre_q, 'approach')
+                        collision = self._planning_mesh_path(high_q, pre_q, 'approach')
                     entry['mesh_approach_collision'] = collision
                     if collision:
                         entry['rejected'] = collision['reason']
@@ -1045,12 +1331,42 @@ class GraspExecutor:
                         continue
                     self.servo_descents[(index, flipped)] = descent
                 cost = max(gd['orientation_error_deg'], pd['orientation_error_deg']) + .1 * index
+                entry['planning_cost_base'] = cost
+                if getattr(self, 'candidate_contact_ranking', False):
+                    from .candidate_contact import ContactBandConfig, contact_priority_key
+                    contact = self._contact_band_diagnostic(point_for_plan, achieved)
+                    policy = getattr(self, 'candidate_contact_policy', 'soft8')
+                    priority = contact_priority_key(cost, contact, config=ContactBandConfig(enabled=True, policy=policy))
+                    contact_priorities[(index, flipped)] = priority
+                    cost += contact['penalty_deg_equivalent']
+                    entry['candidate_contact'] = contact
+                    entry['candidate_contact_policy'] = policy
+                    entry['candidate_contact_priority'] = list(priority)
+                entry['planning_cost'] = cost
                 entry['accepted'] = True
                 plans.append((cost, index, candidate, point_for_plan, grasp_q, pre_q, achieved, flipped))
-        return min(plans, key=lambda x: x[0]) if plans else None
+        key = ((lambda x: contact_priorities[(x[1], x[-1])]) if getattr(self, 'candidate_contact_ranking', False)
+               else (lambda x: x[0]))
+        selected = min(plans, key=key) if plans else None
+        if getattr(self, 'candidate_contact_ranking', False) and plans:
+            costs = {(e['candidate'], e['symmetric_flip']): e['planning_cost_base']
+                     for e in self.ik_attempts if e.get('accepted') and 'planning_cost_base' in e}
+            baseline = min(plans, key=lambda x: costs[(x[1], x[-1])])
+            self.candidate_contact_events.append({'open_joint_rad': self.open_joint_rad,
+                'candidate_start': candidate_start, 'candidate_stop': stop,
+                'baseline_candidate': baseline[1], 'baseline_candidate_id': baseline[2].get('candidate_id', baseline[1]),
+                'baseline_symmetric_flip': baseline[-1],
+                'selected_candidate': selected[1], 'selected_candidate_id': selected[2].get('candidate_id', selected[1]),
+                'selected_symmetric_flip': selected[-1],
+                'policy': getattr(self, 'candidate_contact_policy', 'soft8'),
+                'selected_priority': list(contact_priorities[(selected[1], selected[-1])]),
+                'semantics': 'soft heuristic cost units; same feasible plans and unchanged candidate poses'})
+        return selected
 
     def _close_centered(self, centre, rotation):
         """Track pad midpoint from robot kinematics while the asymmetric jaw closes."""
+        if getattr(self, 'arm_tracking_feedback', False):
+            return self._close_centered_synchronized(centre, rotation)
         target = tensor(self.robot.data.joint_pos).clone()
         start_grip = float(target[0, self.grip])
         adaptive = self.controller == 'servo' and SERVO_CONFIG['close_policy'] == 'contact_stall'
@@ -1093,7 +1409,373 @@ class GraspExecutor:
             self._start_grasp_hold(latch.target)
         return target
 
+    def _prepare_synchronized_closure(self, centre, rotation, start, count):
+        """Preflight every nominal jaw increment at a fixed observed grasp center."""
+        if getattr(self, 'close_frame_policy', 'fixed-body') == 'reachable-line':
+            return self._prepare_reachable_line_closure(centre, rotation, start, count)
+        if getattr(self, 'close_frame_policy', 'fixed-body') == 'planned-line':
+            return self._prepare_planned_line_closure(centre, rotation, start, count)
+        from .gripper_geometry import FIXED_REFERENCE_M, MOVING_REFERENCE_M
+        seed = start.clone()
+        path, evidence = [], {'phase': 'close_preflight', 'waypoints': [], 'table_margin_m': SERVO_CONFIG['mesh_table_margin_m'],
+            'future_required_table_margin_m': SERVO_CONFIG['mesh_table_margin_m'] + self._planning_table_buffer(),
+            'origin_runtime_margin_m': SERVO_CONFIG['mesh_table_margin_m']}
+        for index, jaw in enumerate(np.linspace(float(start[0, self.grip]), CONFIG['closed_joint_rad'], count + 1)):
+            midpoint_b = (FIXED_REFERENCE_M + self.gripper_geometry.moving_to_fixed(MOVING_REFERENCE_M, jaw)) / 2
+            desired = np.asarray(centre) + np.asarray(rotation) @ (self.tool_offset_b - midpoint_b)
+            q, diagnostic = self._solve(desired, rotation, seed, prefer_near=True)
+            item = {'index': index, 'jaw_joint_target_rad': float(jaw), **diagnostic}
+            evidence['waypoints'].append(item)
+            self.close_ik_attempts.append({'close_step': index, 'preflight': True,
+                'requested_pocket_world_m': desired.tolist(), **diagnostic})
+            if q is None:
+                evidence['failure_reason'] = 'close_preflight_ik'
+                return None, evidence
+            q[:, self.grip] = float(jaw)
+            delta = float((q[:, self.arm] - seed[:, self.arm]).abs().max())
+            item.update(max_arm_delta_rad=delta, joint_target=q[0].tolist())
+            if delta > SERVO_CONFIG['cartesian_max_joint_delta_rad']:
+                evidence['failure_reason'] = 'close_preflight_joint_jump'
+                return None, evidence
+            # The measured origin requires the original runtime clearance.
+            # Every future nominal endpoint, and paths joining such endpoints,
+            # must preserve the separate tracking reserve as well.
+            future_collision = self._planning_mesh_at_q(q)
+            item['future_endpoint_collision'] = future_collision
+            if future_collision:
+                evidence.update(failure_reason='close_preflight_tracking_clearance', collision=future_collision)
+                return None, evidence
+            collision = self._check_path(seed, q, 'close_preflight')
+            if collision is None:
+                # This connector begins at measured robot state. Use the
+                # original runtime margin, including both segment endpoints.
+                collision = (self._mesh_path(seed, q, 'close_preflight') if index == 0 else
+                             self._planning_mesh_path(seed, q, 'close_preflight'))
+            if collision:
+                evidence.update(failure_reason='close_preflight_collision', collision=collision)
+                return None, evidence
+            path.append((desired, q))
+            seed = q
+        evidence['valid'] = True
+        return path, evidence
+
+    def _prepare_planned_line_closure(self, centre, rotation, start, count):
+        from .closing_line import PlannedClosingLine
+        line = PlannedClosingLine(self.gripper_geometry, centre, rotation,
+                                  float(start[0, self.grip]), self.tool_offset_b)
+        evidence = {'phase': 'close_preflight', 'close_frame_policy': 'planned-line', 'waypoints': [],
+            'table_margin_m': SERVO_CONFIG['mesh_table_margin_m'],
+            'future_required_table_margin_m': SERVO_CONFIG['mesh_table_margin_m']+self._planning_table_buffer(),
+            'origin_runtime_margin_m': SERVO_CONFIG['mesh_table_margin_m'],
+            'initial_planned_rotation': line.rotation0.tolist(), 'initial_measured_jaw_rad': line.jaw0,
+            'preserved_planned_line_frame_world': line.frame0.tolist(), 'canonical_centre_world_m': line.centre.tolist(),
+            'point_shift_added_m': [0., 0., 0.],
+            'geometry_part_count': len(self.mesh_clearance.parts),
+            'sweep': 'fresh full robot FK mesh endpoints and all joint-sampled connecting paths; no fixed-R envelope exemption'}
+        if len(self.mesh_clearance.parts) != 18:
+            evidence['failure_reason'] = 'close_planned_line_geometry_coverage'
+            return None, evidence
+        seed = start.clone(); path = []
+        for index, jaw in enumerate(np.linspace(line.jaw0, CONFIG['closed_joint_rad'], count+1)):
+            desired, requested_rotation, geometry = line.pose(float(jaw))
+            q, diagnostic = self._solve(desired, requested_rotation, seed, prefer_near=True)
+            item = {'index': index, 'jaw_joint_target_rad': float(jaw), 'line_geometry': geometry, **diagnostic}
+            evidence['waypoints'].append(item)
+            self.close_ik_attempts.append({'close_step': index, 'preflight': True,
+                'close_frame_policy': 'planned-line', 'requested_pocket_world_m': desired.tolist(),
+                'requested_rotation_world': requested_rotation.tolist(), **diagnostic})
+            if q is None:
+                evidence['failure_reason'] = 'close_preflight_ik'
+                return None, evidence
+            q[:, self.grip] = float(jaw)
+            delta = float((q[:, self.arm]-seed[:, self.arm]).abs().max())
+            item.update(max_arm_delta_rad=delta, joint_target=q[0].tolist())
+            if delta > SERVO_CONFIG['cartesian_max_joint_delta_rad']:
+                evidence['failure_reason'] = 'close_preflight_joint_jump'
+                return None, evidence
+            future_collision = self._planning_mesh_at_q(q)
+            item['future_endpoint_collision'] = future_collision
+            if future_collision:
+                evidence.update(failure_reason='close_preflight_tracking_clearance', collision=future_collision)
+                return None, evidence
+            collision = self._check_path(seed, q, 'close_planned_line_preflight')
+            if collision is None:
+                collision = (self._mesh_path(seed, q, 'close_planned_line_preflight') if index == 0 else
+                             self._planning_mesh_path(seed, q, 'close_planned_line_preflight'))
+            if collision:
+                evidence.update(failure_reason='close_preflight_collision', collision=collision)
+                return None, evidence
+            path.append((desired, q, requested_rotation))
+            seed = q
+        evidence['valid'] = True
+        return path, evidence
+
+    def _prepare_reachable_line_closure(self, centre, rotation, start, count):
+        from .closing_line import PlannedClosingLine, REACHABLE_LINE_BETAS, REACHABLE_LINE_NOMINAL_ORIENTATION_DEG
+        self._reachable_closing_line = None
+        evidence = {'phase': 'close_preflight', 'close_frame_policy': 'reachable-line',
+            'beta_candidates': list(REACHABLE_LINE_BETAS), 'beta_attempts': [], 'waypoints': [],
+            'nominal_orientation_limit_deg': REACHABLE_LINE_NOMINAL_ORIENTATION_DEG,
+            'runtime_orientation_limit_deg': SERVO_CONFIG['orientation_tolerance_deg'],
+            'orientation_reserve_deg': SERVO_CONFIG['orientation_tolerance_deg']-REACHABLE_LINE_NOMINAL_ORIENTATION_DEG,
+            'nominal_position_limit_m': CONFIG['ik_position_tolerance_m'],
+            'table_margin_m': SERVO_CONFIG['mesh_table_margin_m'],
+            'future_required_table_margin_m': SERVO_CONFIG['mesh_table_margin_m']+self._planning_table_buffer(),
+            'origin_runtime_margin_m': SERVO_CONFIG['mesh_table_margin_m'],
+            'selected_beta': None, 'selection': 'first complete feasible path in fixed descending beta list'}
+        for beta in REACHABLE_LINE_BETAS:
+            path, attempt = self._prepare_reachable_line_beta(centre, rotation, start, count, beta)
+            evidence['beta_attempts'].append(attempt)
+            if path is not None:
+                self._reachable_closing_line = PlannedClosingLine(self.gripper_geometry, centre, rotation,
+                    float(start[0, self.grip]), self.tool_offset_b, beta=beta)
+                evidence.update(valid=True, selected_beta=beta, waypoints=attempt['waypoints'],
+                    initial_planned_rotation=attempt['initial_planned_rotation'],
+                    initial_measured_jaw_rad=attempt['initial_measured_jaw_rad'],
+                    preserved_planned_line_frame_world=attempt['preserved_planned_line_frame_world'],
+                    canonical_centre_world_m=attempt['canonical_centre_world_m'],
+                    point_shift_added_m=[0., 0., 0.], geometry_part_count=attempt['geometry_part_count'])
+                return path, evidence
+        evidence.update(valid=False, failure_reason='close_reachable_line_no_feasible_beta')
+        return None, evidence
+
+    def _prepare_reachable_line_beta(self, centre, rotation, start, count, beta):
+        from .closing_line import PlannedClosingLine, REACHABLE_LINE_NOMINAL_ORIENTATION_DEG
+        line = PlannedClosingLine(self.gripper_geometry, centre, rotation,
+                                  float(start[0, self.grip]), self.tool_offset_b, beta=beta)
+        evidence = {'beta': beta, 'valid': False, 'waypoints': [],
+            'initial_planned_rotation': line.rotation0.tolist(), 'initial_measured_jaw_rad': line.jaw0,
+            'preserved_planned_line_frame_world': line.frame0.tolist(), 'canonical_centre_world_m': line.centre.tolist(),
+            'geometry_part_count': len(self.mesh_clearance.parts), 'point_shift_added_m': [0., 0., 0.],
+            'nominal_orientation_limit_deg': REACHABLE_LINE_NOMINAL_ORIENTATION_DEG,
+            'nominal_position_limit_m': CONFIG['ik_position_tolerance_m'],
+            'sweep': 'fresh original full FK 18-hull endpoints and joint-sampled paths for this beta'}
+        if len(self.mesh_clearance.parts) != 18:
+            evidence['failure_reason'] = 'close_planned_line_geometry_coverage'
+            return None, evidence
+        path = []; seed = start.clone()
+        # Inspect all 56 points even after a rejected point, recording exactly
+        # which poses were evaluated. No incomplete path can ever be selected.
+        for index, jaw in enumerate(np.linspace(line.jaw0, CONFIG['closed_joint_rad'], count+1)):
+            desired, requested_rotation, geometry = line.pose(float(jaw))
+            q, diagnostic = self._solve(desired, requested_rotation, seed, prefer_near=True)
+            diagnostic = dict(diagnostic)
+            unavailable = []
+            for key in ('position_error_m', 'orientation_error_deg'):
+                value = diagnostic.get(key)
+                if (value is None or isinstance(value, bool) or
+                        not isinstance(value, (int, float, np.number)) or not np.isfinite(value)):
+                    diagnostic[key] = None  # absence is explicit; never fabricate a finite residual
+                    unavailable.append(key)
+            item = {'index': index, 'jaw_joint_target_rad': float(jaw), 'line_geometry': geometry,
+                    **diagnostic, 'failures': [], 'path_point_valid': False,
+                    'unavailable_nominal_pose_fields': unavailable}
+            evidence['waypoints'].append(item)
+            self.close_ik_attempts.append({'close_step': index, 'preflight': True,
+                'close_frame_policy': 'reachable-line', 'compensation_beta': beta,
+                'requested_pocket_world_m': desired.tolist(), 'requested_rotation_world': requested_rotation.tolist(),
+                'nominal_orientation_limit_deg': REACHABLE_LINE_NOMINAL_ORIENTATION_DEG, **diagnostic})
+            if q is None or diagnostic.get('valid') is not True:
+                item['failures'].append('close_preflight_ik')
+                continue  # subsequent original IK calls seed from the last returned valid q
+            position_error = diagnostic.get('position_error_m')
+            orientation_error = diagnostic.get('orientation_error_deg')
+            pose_available = (position_error is not None and orientation_error is not None and
+                np.isfinite([position_error, orientation_error]).all() and position_error >= 0 and orientation_error >= 0)
+            pose_passed = (pose_available and position_error < CONFIG['ik_position_tolerance_m'] and
+                           orientation_error <= REACHABLE_LINE_NOMINAL_ORIENTATION_DEG)
+            item['nominal_pose_gate'] = {'available': bool(pose_available), 'passed': bool(pose_passed),
+                'position_error_m': position_error, 'orientation_error_deg': orientation_error,
+                'position_limit_m': CONFIG['ik_position_tolerance_m'],
+                'orientation_limit_deg': REACHABLE_LINE_NOMINAL_ORIENTATION_DEG}
+            if not pose_passed:
+                item['failures'].append('close_preflight_nominal_pose' if pose_available else 'close_preflight_nominal_pose_unavailable')
+            q[:, self.grip] = float(jaw)
+            delta = float((q[:, self.arm]-seed[:, self.arm]).abs().max())
+            item.update(max_arm_delta_rad=delta, joint_target=q[0].tolist())
+            if delta > SERVO_CONFIG['cartesian_max_joint_delta_rad']:
+                item['failures'].append('close_preflight_joint_jump')
+            future_collision = self._planning_mesh_at_q(q)
+            item['future_endpoint_collision'] = future_collision
+            if future_collision:
+                item['failures'].append('close_preflight_tracking_clearance')
+            collision = self._check_path(seed, q, 'close_reachable_line_preflight')
+            if collision is None:
+                collision = (self._mesh_path(seed, q, 'close_reachable_line_preflight') if index == 0 else
+                             self._planning_mesh_path(seed, q, 'close_reachable_line_preflight'))
+            item['connector_collision'] = collision
+            if collision:
+                item['failures'].append('close_preflight_collision')
+            if not item['failures']:
+                item['path_point_valid'] = True
+                path.append((desired, q, requested_rotation))
+            seed = q
+        failed = [item for item in evidence['waypoints'] if item['failures']]
+        if failed:
+            evidence.update(failure_reason=failed[0]['failures'][0], first_failed_index=failed[0]['index'],
+                            failed_point_count=len(failed))
+            return None, evidence
+        evidence['valid'] = True
+        return path, evidence
+
+    def _closure_followup_rotation(self, original_rotation):
+        if getattr(self, 'close_frame_policy', 'fixed-body') not in ('planned-line', 'reachable-line'):
+            return original_rotation
+        if self._last_closure_rotation is None or self._last_closure_tool is None:
+            raise RuntimeError('planned-line closure completed without an issued planned pose')
+        rotation = self._last_closure_rotation.copy()
+        self.motion_goal = (self._last_closure_tool.copy(), rotation)
+        self.motion_diagnostics.append({'phase': 'hold_lift_orientation', 'event': 'last_planned_closure_rotation_inherited',
+            'requested_rotation_world': rotation.tolist(), 'requested_tool_world_m': self._last_closure_tool.tolist(),
+            'source': 'last successfully issued planned closure waypoint; measured body rotation excluded'})
+        return rotation
+
+    def _close_centered_synchronized(self, centre, rotation):
+        # Adjacent transfer owns only this invocation of this preflight path.
+        # Cleanup runs on normal completion, timeout, safety stop or exception.
+        try:
+            return self._close_centered_synchronized_impl(centre, rotation)
+        finally:
+            if getattr(self, 'close_integral_transfer', 'reset') == 'adjacent':
+                self._pending_close_integral_transfer = None
+                self._arm_tracking.end_close()
+
+    def _close_centered_synchronized_impl(self, centre, rotation):
+        from .arm_tracking import MotionSynchronizationConfig
+        config = MotionSynchronizationConfig()
+        start = tensor(self.robot.data.joint_pos).clone()
+        planned_line = getattr(self, 'close_frame_policy', 'fixed-body') in ('planned-line', 'reachable-line')
+        if planned_line:
+            self._last_closure_rotation = self._last_closure_tool = None
+        path, evidence = self._prepare_synchronized_closure(centre, rotation, start, config.close_advance_steps)
+        self.motion_diagnostics.append(evidence)
+        if path is None:
+            self.motion_failure = evidence['failure_reason']
+            return None
+        adjacent_transfer = getattr(self, 'close_integral_transfer', 'reset') == 'adjacent'
+        if adjacent_transfer and evidence.get('valid') is not True:
+            self.motion_failure = 'close_integral_transfer_preflight_unavailable'
+            return None
+        desired, target = path[0][:2]
+        if planned_line:
+            rotation = path[0][2]
+        self.motion_goal = (desired, rotation)
+        if not self._move(target, 'close_align', config.close_alignment_move_steps) or not self._arrive(target, desired, rotation, 'close_align'):
+            if not self.motion_failure:
+                self.motion_failure = 'close_alignment_failed'
+            return None
+        if adjacent_transfer:
+            transfer_path = [q[0].detach().cpu().numpy().copy() for _, q in path]
+            self._arm_tracking.begin_close(transfer_path)
+        latch = _ClosureContactLatch((float(start[0, self.grip]) - CONFIG['closed_joint_rad']) /
+                                      (config.close_advance_steps * self.env.step_dt),
+                                      policy=getattr(self, 'closure_latch_policy', 'legacy'))
+        progress = stable = final_steps = 0
+        for elapsed in range(config.close_max_steps):
+            if not self.env.tracking or not self.collision_ready:
+                return None
+            actual = tensor(self.robot.data.joint_pos)
+            velocity = tensor(self.robot.data.joint_vel)
+            # Feedback modifies only arm joints. For no_reopen explicitly use
+            # the last successfully issued jaw command, never the measured jaw
+            # or a future precomputed waypoint as the retained command.
+            issued = getattr(self, '_last_issued_target', None)
+            if latch.policy == 'no_reopen' and issued is None:
+                self.motion_failure = 'close_latch_command_unavailable'
+                return None
+            jaw_command = (float(issued[0, self.grip]) if latch.policy == 'no_reopen'
+                           else float(target[0, self.grip]))
+            event = latch.observe(float(self.scorer()['claw_force']), float(actual[0, self.grip]),
+                                  jaw_command, float(velocity[0, self.grip]))
+            if event is not None:
+                self.close_control_events.append({'close_step': progress, 'elapsed_close_steps': elapsed,
+                    'step': int(self.env.episode_length_buf[0]), **event})
+            _, pocket = self._pad_midpoint()
+            position_error = float(np.linalg.norm(pocket - desired))
+            angle = float(np.degrees(Rotation.from_matrix(np.asarray(rotation).T @ self._body_rotation()).magnitude()))
+            arm_error = float((actual[:, self.arm] - target[:, self.arm]).abs().max())
+            speed = float(velocity[:, self.arm].abs().max())
+            settled = (position_error <= SERVO_CONFIG['position_tolerance_m'] and
+                angle <= SERVO_CONFIG['orientation_tolerance_deg'] and arm_error <= SERVO_CONFIG['arm_joint_tolerance_rad'] and
+                speed <= config.arm_speed_tolerance_rad_s)
+            stable = stable + 1 if settled else 0
+            advanced = False
+            if latch.target is None and progress < config.close_advance_steps and stable >= config.consecutive_steps:
+                previous_progress = progress
+                previous_target = target
+                progress += 1
+                desired, target = path[progress][:2]
+                if planned_line:
+                    rotation = path[progress][2]
+                if adjacent_transfer:
+                    token = self._arm_tracking.authorize_adjacent_transfer(transfer_path,
+                        previous_progress, progress, previous_target[0].detach().cpu().numpy(),
+                        target[0].detach().cpu().numpy())
+                    self._pending_close_integral_transfer = token
+                    self.close_control_events.append({'event': 'integral_transfer_authorized',
+                        'step': int(self.env.episode_length_buf[0]), 'elapsed_close_steps': elapsed,
+                        'authorized': token is not None, 'path_preflight_valid': True,
+                        'session': token.session if token is not None else None,
+                        'from_index': previous_progress, 'to_index': progress,
+                        'settled': settled, 'consecutive_settled_steps': stable,
+                        'latched': False, 'previous_nominal': previous_target[0].tolist(),
+                        'next_nominal': target[0].tolist(), 'accepted_integral_before_transfer_rad': self._arm_tracking.integral.tolist()})
+                stable = 0
+                advanced = True
+            elif latch.target is not None:
+                if adjacent_transfer:
+                    self._pending_close_integral_transfer = None
+                    self._arm_tracking.clear_integral()
+                # Arm reference follows actual stopped jaw geometry; the locked
+                # jaw command remains exactly the original contact-stall rule.
+                index = int(np.argmin([abs(float(item[1][0, self.grip]) - float(actual[0, self.grip])) for item in path]))
+                desired, prepared = path[index][:2]
+                if planned_line:
+                    rotation = path[index][2]
+                target = prepared.clone()
+                target[:, self.grip] = latch.target
+            finished = latch.target is not None or progress == config.close_advance_steps
+            final_steps = final_steps + 1 if finished else 0
+            self.close_control_events.append({'event': 'closure_synchronization',
+                'step': int(self.env.episode_length_buf[0]), 'elapsed_close_steps': elapsed,
+                'jaw_advance_steps': progress, 'jaw_advanced': advanced,
+                'consecutive_settled_steps': stable, 'arm_settled': settled,
+                'position_error_m': position_error, 'orientation_error_deg': angle,
+                'max_arm_joint_error_rad': arm_error, 'max_arm_joint_speed_rad_s': speed,
+                'nominal_jaw_target_rad': float(target[0, self.grip]), 'latched': latch.target is not None,
+                **({'planned_line_target': {'waypoint_index': index if latch.target is not None else progress,
+                    'requested_rotation_world': np.asarray(rotation).tolist(),
+                    'requested_tool_world_m': np.asarray(desired).tolist(),
+                    'gate_timing': 'published gate precedes any waypoint advance; target here is next issued nominal'}}
+                   if planned_line else {})})
+            self.motion_goal = (desired, rotation)
+            if not self._step(target, 'close_centered'):
+                return None
+            if planned_line:
+                self._last_closure_rotation = np.array(rotation, copy=True)
+                self._last_closure_tool = np.array(desired, copy=True)
+            if finished and final_steps >= config.close_final_hold_steps:
+                if latch.target is None:
+                    target[:, self.grip] = max(CONFIG['closed_joint_rad'],
+                        float(tensor(self.robot.data.joint_pos)[0, self.grip]) - SERVO_CONFIG['hold_preload_rad'])
+                    self.close_control_events.append({'event': 'contact_stall_not_observed',
+                        'final_joint_target_rad': float(target[0, self.grip])})
+                else:
+                    self._start_grasp_hold(latch.target)
+                if not planned_line:
+                    self.motion_goal = None
+                return target
+        self.motion_failure = 'close_synchronization_timeout'
+        self.motion_diagnostics.append({'phase': 'close_centered', 'arrived': False,
+            'failure_reason': self.motion_failure, 'elapsed_close_steps': config.close_max_steps,
+            'jaw_advance_steps': progress, 'max_close_steps': config.close_max_steps})
+        return None
+
     def execute(self, candidates, scene):
+        if getattr(self, 'arm_tracking_feedback', False):
+            self._arm_tracking.reset()
+            self._last_nominal_target = None
+            self._last_issued_target = None
         self._stop_grasp_hold('execute_start', 'execution_reset')
         self._grasp_hold_last_target_rad = None
         try:
@@ -1180,8 +1862,12 @@ class GraspExecutor:
                         failure = 'close_or_lift'
                         if self.controller in ('repaired', 'servo'):
                             self.motion_goal = None
-                            rotation = self._body_rotation()
+                            rotation = self._closure_rotation(rotation)
                             closed = self._close_centered(point, rotation)
+                            if closed is None:
+                                failure = self.motion_failure or 'close_synchronization_failed'
+                                break
+                            rotation = self._closure_followup_rotation(rotation)
                         else:
                             closed = tensor(self.robot.data.joint_pos).clone()
                             closed[:, self.grip] = CONFIG['closed_joint_rad']
@@ -1206,6 +1892,8 @@ class GraspExecutor:
                             liftpoint = lift_origin + np.array([0, 0, CONFIG['lift_distance_m']])
                             lift_q, ld = self._solve(liftpoint, rotation, closed)
                             chosen['lift_ik'] = ld
+                            if lift_q is None:
+                                failure = 'lift_ik_rejected'
                             if lift_q is not None:
                                 if self.controller == 'servo':
                                     self.motion_goal = (liftpoint, rotation)
@@ -1241,10 +1929,44 @@ class GraspExecutor:
         self.lift_success |= bool(scene == 'multi' and success)
         (self.directory / 'execution_trace.json').write_text(json.dumps(self.trace, indent=2, allow_nan=False) + '\n')
         from .arm_collision import CLOSED_PAD_SPAN_M, OPEN_PAD_SPAN_M, rejection_counts
+        from .arm_tracking import MotionSynchronizationConfig
         return {'success': success, 'grasp_lift_success': self.lift_success, 'robot_executed': self.executed,
                 'failure_stage': failure, 'max_rise_m': self.max_rise, 'chosen': chosen,
                 'ik_attempts': self.ik_attempts, 'rejection_counts': rejection_counts(self.ik_attempts),
                 'motion_diagnostics': self.motion_diagnostics, 'close_ik_attempts': self.close_ik_attempts,
+                'arm_tracking_feedback': {
+                    'enabled': getattr(self, 'arm_tracking_feedback', False),
+                    'config': asdict(self._arm_tracking.config) if getattr(self, 'arm_tracking_feedback', False) else None,
+                    'planning_table_buffer_m': self._planning_table_buffer(),
+                    'motion_synchronization': asdict(MotionSynchronizationConfig()) if getattr(self, 'arm_tracking_feedback', False) else None,
+                    'nominal_transition_policy': 'last_issued_nominal' if getattr(self, 'arm_tracking_feedback', False) else 'measured_joint_position',
+                    'closure_latch_policy': getattr(self, 'closure_latch_policy', 'legacy'),
+                    'close_integral_transfer': getattr(self, 'close_integral_transfer', 'reset'),
+                    'close_frame_policy': getattr(self, 'close_frame_policy', 'fixed-body'),
+                    'close_tracking_integral': {'enabled': getattr(self, 'close_tracking_integral', False),
+                        'gain_per_s': .2, 'stationary_nominal_steps': 3, 'arm_speed_tolerance_rad_s': .05,
+                        'max_dt_s': .05, 'phase': 'close_centered',
+                        'reset_on_waypoint_change': getattr(self, 'close_integral_transfer', 'reset') == 'reset',
+                        'waypoint_transfer': getattr(self, 'close_integral_transfer', 'reset'),
+                        'unqualified_waypoint_change': 'reset',
+                        'total_bias_bound_rad': .025, 'total_bias_slew_rad_per_step': .004,
+                        'antiwindup': 'conditional_integration', 'commit': 'safety_accept_only',
+                        'rejection': 'stop_before_next_action_in_close_centered',
+                        'outside_close_rejection': 'original_safe_nominal_fallback'},
+                    'arrival_reference': 'unchanged nominal IK tool pose and joint target',
+                    'source': 'robot nominal and measured joints only; no target pose, class or score',
+                    'events': getattr(self, 'arm_tracking_events', [])},
+                'candidate_contact_ranking': {'enabled': getattr(self, 'candidate_contact_ranking', False),
+                    'policy': getattr(self, 'candidate_contact_policy', 'soft8'),
+                    'events': getattr(self, 'candidate_contact_events', [])},
+                'closure_geometry_preflight': {
+                    'enabled': getattr(self, 'arm_tracking_feedback', False),
+                    'method': 'analytic full-jaw constant-pad-midpoint hull vertex height envelope before candidate commitment',
+                    'future_required_table_margin_m': SERVO_CONFIG['mesh_table_margin_m'] + self._planning_table_buffer(),
+                    'origin_runtime_margin_m': SERVO_CONFIG['mesh_table_margin_m'],
+                    'max_total_vertical_correction_m': SERVO_CONFIG['mesh_max_vertical_correction_m'],
+                    'correction_policy': 'joint open-FK and full-closure clearance; one local re-solve then recheck or reject',
+                    'table_xy_assumption': 'analytic screening conservatively counts every gripper vertex over table'},
                 'close_control_events': self.close_control_events,
                 'hold_control_evidence': {
                     'enabled': self.controller == 'servo' and SERVO_CONFIG['bounded_hold_enabled'],
@@ -1268,6 +1990,25 @@ class GraspExecutor:
                     'candidate_pool_count': len(candidates), 'primary_candidate_limit': CONFIG['max_candidates'],
                     'tool_offset_body_m': self.tool_offset_b.tolist(),
                     'controller': self.controller, 'collision_check': self.collision_check,
+                    'arm_tracking_planning_table_buffer_m': self._planning_table_buffer(),
+                    'required_planning_table_margin_m': SERVO_CONFIG['mesh_table_margin_m'] + self._planning_table_buffer(),
+                    'motion_synchronization': asdict(MotionSynchronizationConfig()) if getattr(self, 'arm_tracking_feedback', False) else None,
+                    'full_closure_envelope_enabled': getattr(self, 'arm_tracking_feedback', False),
+                    'nominal_move_start_policy': 'last_issued_nominal' if getattr(self, 'arm_tracking_feedback', False) else 'measured_joint_position',
+                    'closure_orientation_policy': 'planned_achieved' if getattr(self, 'arm_tracking_feedback', False) else 'measured_body_rotation',
+                    'closure_latch_policy': getattr(self, 'closure_latch_policy', 'legacy'),
+                    'close_integral_transfer': getattr(self, 'close_integral_transfer', 'reset'),
+                    'close_frame_policy': getattr(self, 'close_frame_policy', 'fixed-body'),
+                    'close_tracking_integral': {'enabled': getattr(self, 'close_tracking_integral', False),
+                        'gain_per_s': .2, 'stationary_nominal_steps': 3, 'arm_speed_tolerance_rad_s': .05,
+                        'max_dt_s': .05, 'phase': 'close_centered',
+                        'reset_on_waypoint_change': getattr(self, 'close_integral_transfer', 'reset') == 'reset',
+                        'waypoint_transfer': getattr(self, 'close_integral_transfer', 'reset'),
+                        'unqualified_waypoint_change': 'reset',
+                        'total_bias_bound_rad': .025, 'total_bias_slew_rad_per_step': .004,
+                        'antiwindup': 'conditional_integration', 'commit': 'safety_accept_only',
+                        'rejection': 'stop_before_next_action_in_close_centered',
+                        'outside_close_rejection': 'original_safe_nominal_fallback'},
                     'servo': SERVO_CONFIG if self.controller == 'servo' else None,
                     'closure': ('centre_tracking_contact_stall_latch' if self.controller == 'servo' and
                                 SERVO_CONFIG['close_policy'] == 'contact_stall' else

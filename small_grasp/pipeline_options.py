@@ -25,6 +25,39 @@ def sam_path(args):
 
 
 def validate_options(args):
+    close_frame = getattr(args, 'close_frame_policy', 'fixed-body')
+    if close_frame not in ('fixed-body', 'planned-line', 'reachable-line'):
+        raise ValueError('Unsupported --close-frame-policy')
+    if close_frame in ('planned-line', 'reachable-line') and (args.controller != 'servo' or not getattr(args, 'arm_tracking_feedback', False) or
+            args.contact_frame != 'open' or getattr(args, 'close_tracking_integral', False) or
+            getattr(args, 'close_integral_transfer', 'reset') != 'reset' or
+            getattr(args, 'closure_latch_policy', 'legacy') != 'legacy'):
+        raise ValueError('--close-frame-policy planned-line/reachable-line requires servo tracking, open frame, integral off, reset transfer and legacy latch')
+    transfer = getattr(args, 'close_integral_transfer', 'reset')
+    if transfer not in ('reset', 'adjacent'):
+        raise ValueError('Unsupported --close-integral-transfer')
+    if transfer == 'adjacent' and (args.controller != 'servo' or not getattr(args, 'arm_tracking_feedback', False) or
+                                   not getattr(args, 'close_tracking_integral', False)):
+        raise ValueError('--close-integral-transfer adjacent requires --controller servo --arm-tracking-feedback --close-tracking-integral')
+    if getattr(args, 'close_tracking_integral', False) and (args.controller != 'servo' or not getattr(args, 'arm_tracking_feedback', False)):
+        raise ValueError('--close-tracking-integral requires --controller servo --arm-tracking-feedback')
+    latch_policy = getattr(args, 'closure_latch_policy', 'legacy')
+    if latch_policy not in ('legacy', 'no_reopen'):
+        raise ValueError('Unsupported --closure-latch-policy')
+    if latch_policy != 'legacy' and (args.controller != 'servo' or not getattr(args, 'arm_tracking_feedback', False)):
+        raise ValueError('--closure-latch-policy no_reopen requires --controller servo --arm-tracking-feedback')
+    if getattr(args, 'arm_tracking_feedback', False) and args.controller != 'servo':
+        raise ValueError('--arm-tracking-feedback requires --controller servo')
+    if getattr(args, 'candidate_contact_ranking', False) and args.controller != 'servo':
+        raise ValueError('--candidate-contact-ranking requires --controller servo')
+    if getattr(args, 'candidate_contact_policy', 'soft8') != 'soft8' and not getattr(args, 'candidate_contact_ranking', False):
+        raise ValueError('--candidate-contact-policy requires --candidate-contact-ranking')
+    scenes = getattr(args, 'scenes', [getattr(args, 'scene', '')])
+    if 'object-single' in scenes:
+        if (args.controller != 'servo' or args.mask_backend != 'dino' or
+                args.segmentation_backend != 'sam' or args.grasp_point != 'network' or
+                args.contact_frame != 'open'):
+            raise ValueError('object-single requires servo, real DINO/SAM, network poses and open contact frame')
     from .network_frame import frame_metadata
     frame_metadata(getattr(args, 'wrist_camera_profile', None), getattr(args, 'network_frame', 'camera'))
     if getattr(args, 'live_debug', False):

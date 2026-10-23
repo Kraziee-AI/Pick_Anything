@@ -14,7 +14,8 @@ OBSERVER_TARGET = (.35, -.46, .12)
 class EpisodeVideo:
     """Stream sampled simulation frames to H.264 without retaining raw frames."""
 
-    def __init__(self, path, supplier, step_dt, trial, episodes, seed, fps=15.):
+    def __init__(self, path, supplier, step_dt, trial, episodes, seed, fps=15., *,
+                 target_label=None, score_schema=None, lift_only=False, capture_only=False):
         if not math.isfinite(fps) or fps <= 0 or fps > 1 / step_dt + 1e-6:
             raise ValueError('Video FPS must be positive and not exceed control frequency')
         self.path, self.supplier = Path(path), supplier
@@ -27,6 +28,9 @@ class EpisodeVideo:
         self.stride = max(1, round(1 / (fps * step_dt)))
         self.fps, self.step_dt = 1 / (self.stride * step_dt), float(step_dt)
         self.trial, self.episodes, self.seed = trial, episodes, seed
+        self.target_label, self.score_schema = target_label, score_schema
+        self.lift_only, self.capture_only = bool(lift_only), bool(capture_only)
+        self.contextual = bool(target_label or score_schema or lift_only or capture_only)
         self.steps, self.frames, self.last, self.closed = 0, 0, None, False
         self.metadata = None
         self.log_path = self.path.with_suffix('.ffmpeg.log')
@@ -70,9 +74,32 @@ class EpisodeVideo:
         draw.text((VIDEO_WIDTH - 334, 49), 'Wrist RGB', font=font, fill='white', stroke_width=1,
                   stroke_fill='black')
         draw.rectangle((0, VIDEO_HEIGHT - 42, VIDEO_WIDTH, VIDEO_HEIGHT), fill=(18, 22, 28))
-        draw.text((14, VIDEO_HEIGHT - 33), status or 'DINO + SAM + RGB-D + GraspNet | single-orange simulation',
+        draw.text((14, VIDEO_HEIGHT - 33), status or self._default_status(),
                   font=font, fill='white')
         return np.asarray(frame)
+
+    def _default_status(self):
+        if not self.contextual:
+            return 'DINO + SAM + RGB-D + GraspNet | single-orange simulation'
+        label = self.target_label or 'unspecified target'
+        mode = 'CAPTURE ONLY | NO GRASP ATTEMPTED' if self.capture_only else 'DINO + SAM + RGB-D + GraspNet'
+        return f'{mode} | single-object | target: {label}'
+
+    def _result_status(self, result):
+        prefix = f'{self.target_label} | ' if self.target_label else ''
+        if self.capture_only:
+            mode = 'CAPTURE ONLY' if result is not None else 'CAPTURE INTERRUPTED'
+            return prefix + f'{mode} | NO GRASP ATTEMPTED | PLACE NOT EVALUATED'
+        if result is None:
+            return 'INTERRUPTED'
+        if self.lift_only:
+            def verdict(value):
+                return 'SUCCESS' if value is True else 'FAIL' if value is False else 'NOT EVALUATED'
+            return (prefix + f'GENERIC GRASP: {verdict(result.get("generic_grasp_lift_success"))} | '
+                    f'END HOLD: {verdict(result.get("generic_end_hold_success"))} | PLACE NOT EVALUATED')
+        return (f'GRASP: {"SUCCESS" if result.get("grasp_lift_success") else "FAIL"} | '
+                f'TASK: {"SUCCESS" if result.get("success") else "FAIL"} | '
+                f'{result.get("failure_stage") or "completed"}')
 
     def _write(self, frame):
         try:
@@ -86,10 +113,7 @@ class EpisodeVideo:
             return self.metadata
         try:
             if self.last is not None:
-                status = ('INTERRUPTED' if result is None else
-                          f'GRASP: {"SUCCESS" if result.get("grasp_lift_success") else "FAIL"} | '
-                          f'TASK: {"SUCCESS" if result.get("success") else "FAIL"} | '
-                          f'{result.get("failure_stage") or "completed"}')
+                status = self._result_status(result)
                 end_frame = self._compose(status)
                 for _ in range(round(self.fps)):
                     self._write(end_frame)
@@ -111,5 +135,10 @@ class EpisodeVideo:
                          'timing': 'simulation time; inference/planning wall-time waits omitted',
                          'role': 'passive observer; never supplied to perception or control',
                          'completed': result is not None}
+        if self.contextual:
+            self.metadata.update(target_label=self.target_label, score_schema=self.score_schema,
+                                 lift_only=self.lift_only, capture_only=self.capture_only,
+                                 place_evaluated=False if self.lift_only or self.capture_only else None,
+                                 default_status=self._default_status(), result_status=self._result_status(result))
         self.path.with_suffix('.json').write_text(json.dumps(self.metadata, indent=2) + '\n')
         return self.metadata

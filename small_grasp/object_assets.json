@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "table_top_z_m": 0.041,
+  "spawn_clearance_m": 0.004,
+  "geometry_assumption": "Reference numeric mesh coordinates directly into a metre/Z-up stage; do not apply the fruit standalone-stage .01/Y metadata fallbacks as scale or axis conversions.",
+  "center_semantics": "Scaled collision-AABB midpoint in object-local coordinates, rotated with object pose; privileged scoring only, never perception/control input.",
+  "physics_material": {
+    "static_friction": 0.9,
+    "dynamic_friction": 0.9,
+    "restitution": 0.0
+  },
+  "physics_material_scope": "Fixed uniformly for new object-single targets only. Preserve legacy single and the existing Newton contact initializer.",
+  "newton_contact_friction": {
+    "friction": 0.9,
+    "rolling_friction": 0.5,
+    "torsional_friction": 0.1
+  },
+  "material_evidence": "staged_env_cfg.py _initialize_contacts applies mu=.9, rolling=.5, torsional=.1 to every Newton shape; cube USD authored .8/.65/.02 is overridden by this existing callback.",
+  "objects": {
+    "orange": {
+      "key": "orange",
+      "label": "橘子",
+      "asset_path": "assets/objects/orange/orange.usd",
+      "asset_sha256": "231d85a04837d4c48bf59fd5ef492d239c37074eb539031abe904ad8419f9884",
+      "scale": 0.775,
+      "caption": "orange fruit.",
+      "aliases": [
+        "橘子",
+        "橙子",
+        "orange fruit",
+        "orange"
+      ],
+      "prim_name": "Orange",
+      "center_offset_m": [
+        -0.00021971263922750985,
+        -7.748976349830974e-06,
+        8.137435652315686e-05
+      ],
+      "collision_min_m": [
+        -0.02818520097061992,
+        -0.028898199182003738,
+        -0.027884500846266747
+      ],
+      "collision_max_m": [
+        0.0277457756921649,
+        0.028882701229304076,
+        0.02804724955931306
+      ],
+      "resting_root_height_m": 0.027884500846266747,
+      "height_m": 0.05593175040557981,
+      "footprint_radius_m": 0.04036720785138595,
+      "mass_kg": 0.023000000044703484,
+      "initial_orientation_wxyz": [
+        1.0,
+        0,
+        0,
+        0
+      ],
+      "spawn_z_m": 0.07288450084626676
+    },
+    "apple": {
+      "key": "apple",
+      "label": "苹果",
+      "asset_path": "assets/objects/apple/apple.usd",
+      "asset_sha256": "63e0f915fe441a877765bdd0c1c089bba37b2cdb4c1af027df8b37c201d612a7",
+      "scale": 0.775,
+      "caption": "apple fruit.",
+      "aliases": [
+        "苹果",
+        "红苹果",
+        "apple fruit",
+        "apple"
+      ],
+      "prim_name": "Apple",
+      "center_offset_m": [
+        -0.0002305623609572642,
+        -3.5263039171696056e-05,
+        -0.00012167538516223535
+      ],
+      "collision_min_m": [
+        -0.029442250076681376,
+        -0.029246175568550827,
+        -0.02810847628861666
+      ],
+      "collision_max_m": [
+        0.028981125354766848,
+        0.029175649490207435,
+        0.027865125518292188
+      ],
+      "resting_root_height_m": 0.02810847628861666,
+      "height_m": 0.05597360180690884,
+      "footprint_radius_m": 0.04149921535359848,
+      "mass_kg": 0.02500000037252903,
+      "initial_orientation_wxyz": [
+        1.0,
+        0,
+        0,
+        0
+      ],
+      "spawn_z_m": 0.07310847628861666
+    },
+    "pear": {
+      "key": "pear",
+      "label": "梨",
+      "asset_path": "assets/objects/pear/pear.usd",
+      "asset_sha256": "6f16fc313625267b11324d8984f82825a8a7e148fafbed74319fe2dfdd02c974",
+      "scale": 0.8,
+      "caption": "pear fruit.",
+      "aliases": [
+        "梨子",
+        "黄色梨",
+        "梨",
+        "pear fruit",
+        "pear"
+      ],
+      "prim_name": "Pear",
+      "center_offset_m": [
+        1.4001131057738911e-05,
+        -1.120120286941459e-05,
+        -0.00010920017957687274
+      ],
+      "collision_min_m": [
+        -0.02684159874916077,
+        -0.04041120111942292,
+        -0.026495200395584107
+      ],
+      "collision_max_m": [
+        0.026869601011276247,
+        0.04038879871368409,
+        0.02627680003643036
+      ],
+      "resting_root_height_m": 0.026495200395584107,
+      "height_m": 0.052772000432014465,
+      "footprint_radius_m": 0.048528760899281424,
+      "mass_kg": 0.029999999329447746,
+      "initial_orientation_wxyz": [
+        1.0,
+        0,
+        0,
+        0
+      ],
+      "spawn_z_m": 0.07149520039558412
+    },
+    "blue_cube": {
+      "key": "blue_cube",
+      "label": "蓝色方块",
+      "asset_path": "assets/objects/blue_cube/blue_cube.usda",
+      "asset_sha256": "8d513579211bc0b5e957aff73d42eaf87a54e69d69489a209acab1db9428184b",
+      "scale": 1.0,
+      "caption": "blue cube.",
+      "aliases": [
+        "蓝色方块",
+        "蓝方块",
+        "方块",
+        "立方体",
+        "blue cube",
+        "cube",
+        "block"
+      ],
+      "prim_name": "BlueCube",
+      "center_offset_m": [
+        0.0,
+        0.0,
+        0.025
+      ],
+      "collision_min_m": [
+        -0.02500000037252903,
+        -0.02500000037252903,
+        -3.725290284584126e-10
+      ],
+      "collision_max_m": [
+        0.02500000037252903,
+        0.02500000037252903,
+        0.05000000037252903
+      ],
+      "resting_root_height_m": 3.725290284584126e-10,
+      "height_m": 0.05000000074505806,
+      "footprint_radius_m": 0.035355339586162986,
+      "mass_kg": 0.03500000014901161,
+      "initial_orientation_wxyz": [
+        1.0,
+        0,
+        0,
+        0
+      ],
+      "spawn_z_m": 0.045000000372529034
+    }
+  }
+}

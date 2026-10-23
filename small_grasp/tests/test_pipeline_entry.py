@@ -40,6 +40,12 @@ class LanguageEntryTests(unittest.TestCase):
         self.assertEqual(argv[argv.index('--network-frame') + 1], 'legacy-optical')
         self.assertEqual(argv[argv.index('--wrist-camera-profile') + 1], 'open-jaws')
         self.assertIn('--live-debug', argv)
+        self.assertNotIn('--arm-tracking-feedback', argv)
+        self.assertNotIn('--closure-latch-policy', argv)
+        self.assertNotIn('--close-tracking-integral', argv)
+        self.assertNotIn('--close-integral-transfer', argv)
+        self.assertNotIn('--close-frame-policy', argv)
+        self.assertNotIn('--candidate-contact-ranking', argv)
         self.assertEqual(argv[argv.index('--live-debug-port') + 1], '0')
         self.assertEqual(argv[argv.index('--live-debug-interval') + 1], '2.0')
         for flag, expected in {'--instruction': '抓橘子', '--mask-backend': 'dino',
@@ -57,6 +63,12 @@ class LanguageEntryTests(unittest.TestCase):
                 evaluate(['--scenes', 'multi', '--episodes', '1', '--capture-only',
                           '--instruction', '抓橘子', '--seed', '100', '--segmentation-backend', 'sam',
                           '--controller', 'servo', '--inference-seed', '43',
+                          '--arm-tracking-feedback',
+                          '--closure-latch-policy', 'no_reopen',
+                          '--close-tracking-integral',
+                          '--close-integral-transfer', 'adjacent',
+                          '--candidate-contact-ranking',
+                          '--candidate-contact-policy', 'band_first',
                           '--wrist-camera-profile', 'open-jaws', '--network-frame', 'legacy-optical', '--candidate-pool-size', '20',
                           '--width-scale', '1',
                           '--diagnostic-contacts',
@@ -71,6 +83,18 @@ class LanguageEntryTests(unittest.TestCase):
             self.assertEqual(command[command.index('--network-frame') + 1], 'legacy-optical')
             record = json.loads((output / 'run.json').read_text())
             self.assertEqual(record['network_frame'], 'legacy-optical')
+            self.assertTrue(record['arm_tracking_feedback'])
+            self.assertIn('--arm-tracking-feedback', command)
+            self.assertEqual(record['closure_latch_policy'], 'no_reopen')
+            self.assertTrue(record['close_tracking_integral'])
+            self.assertIn('--close-tracking-integral', command)
+            self.assertEqual(record['close_integral_transfer'], 'adjacent')
+            self.assertEqual(command[command.index('--close-integral-transfer')+1], 'adjacent')
+            self.assertEqual(command[command.index('--closure-latch-policy') + 1], 'no_reopen')
+            self.assertTrue(record['candidate_contact_ranking'])
+            self.assertIn('--candidate-contact-ranking',command)
+            self.assertEqual(record['candidate_contact_policy'],'band_first')
+            self.assertEqual(command[command.index('--candidate-contact-policy')+1],'band_first')
             self.assertEqual(record['network_input_frame']['wrist_camera_profile'], 'open-jaws')
             self.assertEqual(command[command.index('--controller') + 1], 'servo')
             self.assertIn('--diagnostic-contacts', command)
@@ -106,6 +130,28 @@ class LanguageEntryTests(unittest.TestCase):
         for flags in (['--segmentation-backend', 'sam', '--grasp-point', 'sphere'],
                       ['--controller', 'servo', '--grasp-point', 'sphere'],
                       ['--controller', 'servo', '--mask-backend', 'gt'],
+                      ['--arm-tracking-feedback', '--controller', 'repaired'],
+                      ['--closure-latch-policy', 'no_reopen'],
+                      ['--close-tracking-integral'],
+                      ['--close-integral-transfer', 'adjacent'],
+                      ['--close-integral-transfer', 'adjacent', '--controller', 'servo', '--arm-tracking-feedback'],
+                      ['--close-integral-transfer', 'adjacent', '--close-tracking-integral', '--controller', 'repaired'],
+                      ['--close-integral-transfer', 'unknown'],
+                      ['--close-frame-policy', 'planned-line'],
+                      ['--close-frame-policy', 'planned-line', '--controller', 'servo'],
+                      ['--close-frame-policy', 'planned-line', '--controller', 'servo', '--arm-tracking-feedback', '--close-tracking-integral'],
+                      ['--close-frame-policy', 'planned-line', '--controller', 'servo', '--arm-tracking-feedback', '--contact-frame', 'contact'],
+                      ['--close-frame-policy', 'planned-line', '--controller', 'servo', '--arm-tracking-feedback', '--closure-latch-policy', 'no_reopen'],
+                      ['--close-frame-policy', 'planned-line', '--controller', 'servo', '--arm-tracking-feedback', '--close-tracking-integral', '--close-integral-transfer', 'adjacent'],
+                      ['--close-frame-policy', 'reachable-line'],
+                      ['--close-frame-policy', 'reachable-line', '--controller', 'servo', '--arm-tracking-feedback', '--close-tracking-integral'],
+                      ['--close-frame-policy', 'reachable-line', '--controller', 'servo', '--arm-tracking-feedback', '--contact-frame', 'contact'],
+                      ['--close-frame-policy', 'reachable-line', '--controller', 'servo', '--arm-tracking-feedback', '--closure-latch-policy', 'no_reopen'],
+                      ['--close-tracking-integral', '--controller', 'servo'],
+                      ['--closure-latch-policy', 'no_reopen', '--controller', 'servo'],
+                      ['--closure-latch-policy', 'no_reopen', '--arm-tracking-feedback', '--controller', 'repaired'],
+                      ['--candidate-contact-ranking', '--controller', 'repaired'],
+                      ['--candidate-contact-policy', 'band_first'],
                       ['--inference-seed', '-1'],
                       ['--candidate-pool-size', '0'],
                       ['--network-frame', 'unknown'],
@@ -123,3 +169,63 @@ class LanguageEntryTests(unittest.TestCase):
                     evaluate(flags + ['--output-dir', str(output)])
                 launch.assert_not_called()
                 self.assertFalse(output.exists())
+
+    def test_unified_entry_forwards_explicit_tracking_feedback(self):
+        from small_grasp.pick import main
+        with patch('sys.argv', ['small_grasp.pick', '--instruction', 'orange', '--scene', 'single',
+                               '--controller', 'servo', '--arm-tracking-feedback', '--candidate-contact-ranking',
+                               '--closure-latch-policy', 'no_reopen',
+                               '--close-tracking-integral',
+                               '--close-integral-transfer', 'adjacent',
+                               '--candidate-contact-policy', 'band_first']), \
+             patch('small_grasp.run_sim_evaluation.main') as runner, redirect_stdout(io.StringIO()):
+            main()
+        self.assertIn('--arm-tracking-feedback', runner.call_args.args[0])
+        self.assertIn('--close-tracking-integral', runner.call_args.args[0])
+        self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index('--close-integral-transfer')+1], 'adjacent')
+        self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index('--closure-latch-policy')+1], 'no_reopen')
+        self.assertIn('--candidate-contact-ranking',runner.call_args.args[0])
+        self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index('--candidate-contact-policy')+1],'band_first')
+
+    def test_planned_line_entry_and_runner_preserve_single_mechanism_manifest(self):
+        from small_grasp.pick import main
+        with patch('sys.argv',['pick','--instruction','orange','--controller','servo','--arm-tracking-feedback',
+                               '--close-frame-policy','planned-line']), \
+             patch('small_grasp.run_sim_evaluation.main') as runner,redirect_stdout(io.StringIO()):
+            main()
+        argv=runner.call_args.args[0]
+        self.assertEqual(argv[argv.index('--close-frame-policy')+1],'planned-line')
+        self.assertNotIn('--close-tracking-integral',argv)
+        self.assertNotIn('--close-integral-transfer',argv)
+        with tempfile.TemporaryDirectory(dir=ROOT/'cache') as temp:
+            output=Path(temp)/'planned_line'
+            with patch('small_grasp.run_sim_evaluation.subprocess.run') as launch,redirect_stdout(io.StringIO()):
+                evaluate(['--capture-only','--episodes','1','--controller','servo','--arm-tracking-feedback',
+                          '--close-frame-policy','planned-line','--output-dir',str(output)])
+            record=json.loads((output/'run.json').read_text());command=launch.call_args.args[0]
+            self.assertEqual(record['close_frame_policy'],'planned-line')
+            self.assertFalse(record['close_tracking_integral'])
+            self.assertEqual(record['close_integral_transfer'],'reset')
+            self.assertEqual(record['closure_latch_policy'],'legacy')
+            self.assertEqual(command[command.index('--close-frame-policy')+1],'planned-line')
+
+    def test_reachable_line_entry_and_runner_keep_integral_off_and_default_mechanisms(self):
+        from small_grasp.pick import main
+        with patch('sys.argv',['pick','--instruction','orange','--controller','servo','--arm-tracking-feedback',
+                               '--close-frame-policy','reachable-line']), \
+             patch('small_grasp.run_sim_evaluation.main') as runner,redirect_stdout(io.StringIO()):
+            main()
+        argv=runner.call_args.args[0]
+        self.assertEqual(argv[argv.index('--close-frame-policy')+1],'reachable-line')
+        self.assertNotIn('--close-tracking-integral',argv)
+        with tempfile.TemporaryDirectory(dir=ROOT/'cache') as temp:
+            output=Path(temp)/'reachable_line'
+            with patch('small_grasp.run_sim_evaluation.subprocess.run') as launch,redirect_stdout(io.StringIO()):
+                evaluate(['--capture-only','--episodes','1','--controller','servo','--arm-tracking-feedback',
+                          '--close-frame-policy','reachable-line','--output-dir',str(output)])
+            record=json.loads((output/'run.json').read_text());command=launch.call_args.args[0]
+            self.assertEqual(record['close_frame_policy'],'reachable-line')
+            self.assertFalse(record['close_tracking_integral'])
+            self.assertEqual(record['close_integral_transfer'],'reset')
+            self.assertEqual(record['closure_latch_policy'],'legacy')
+            self.assertEqual(command[command.index('--close-frame-policy')+1],'reachable-line')
